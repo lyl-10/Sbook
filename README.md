@@ -46,5 +46,5 @@
 1. 克隆代码仓库：
 
    ```bash
-   git clone [https://github.com/lyl-10/Sbook.git]
-   cd Sbook
+   git clone https://github.com/lyl-10/Sbook.git
+
