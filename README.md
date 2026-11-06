@@ -16,7 +16,7 @@
 ## 拟技术栈
 
 - **前端框架/技术**：React + Next.js 14 + Tailwind CSS
-- **包管理**：pnmp
+- **包管理**：pnpm
 
 ### 前端框架 (核心)
 
@@ -29,17 +29,17 @@
 
 ### 开发工具
 
-- **AI辅助编程**：
-- **UI原型设计**： v0.dev (AI生成UI)
-- **包管理器**：pnpm (推荐)
+- **AI辅助编程**：...
+- **UI原型设计**：v0.dev (AI生成UI)
+- **包管理器**：pnpm
 - **代码规范**：ESLint + Prettier + TypeScript
 
 ## 快速开始
 
 ### 环境要求
 
-- Node.js (推荐 v18.17 或更高)
-- pnpm (推荐)
+- Node.js 20.9
+- pnpm
 
 ### 安装与运行
 
@@ -47,4 +47,21 @@
 
    ```bash
    git clone https://github.com/lyl-10/Sbook.git
+   cd Sbook
 
+2. 安装依赖(如果没有)：
+
+   ```bash
+   pnpm install
+
+3. 运行开发服务器：
+
+   ```bash
+   pnpm dev
+   # 或者使用 npm run dev / yarn dev / bun dev
+
+4. 在浏览器中打开 [`http://localhost:3000`](http://localhost:3000) 查看结果。
+
+## 编辑页面
+
+你可以通过修改 `app/page.tsx` 来开始编辑页面。当你编辑该文件时，页面会自动更新。
