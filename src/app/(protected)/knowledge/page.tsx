@@ -1,202 +1,395 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-
-// 扩展了 "other" 类型以支持所有文件
-type FileItem = {
-  id: string;
-  name: string;
-  type: "pdf" | "image" | "other";
-  url: string;
-  createTime: number;
-};
+import { useEffect, useRef, useState } from "react";
+import { listKnowledgeDocuments, updateKnowledgeMetadata } from "@/app/actions";
+import type { KnowledgeDocument } from "@/lib/database.types";
 
 export default function KnowledgePage() {
-  const [fileList, setFileList] = useState<FileItem[]>([]);
-  const [previewItem, setPreviewItem] = useState<FileItem | null>(null);
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [category, setCategory] = useState("");
+  const [tags, setTags] = useState("");
+  const [search, setSearch] = useState("");
+  const [preview, setPreview] = useState<KnowledgeDocument | null>(null);
+  const [editing, setEditing] = useState<KnowledgeDocument | null>(null);
+  const [editCategory, setEditCategory] = useState("");
+  const [editTags, setEditTags] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 初始化：从 localStorage 读取
-  useEffect(() => {
-    const saved = localStorage.getItem("knowledgeFiles");
-    if (saved) {
-      try {
-        setFileList(JSON.parse(saved));
-      } catch (e) {
-        console.error("解析本地文件列表失败", e);
-      }
+  const loadDocuments = async () => {
+    const result = await listKnowledgeDocuments();
+    if ("error" in result) setError(result.error);
+    else {
+      setDocuments(result.data);
+      setError("");
     }
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    let active = true;
+    void listKnowledgeDocuments()
+      .then((result) => {
+        if (!active) return;
+        if ("error" in result) setError(result.error);
+        else setDocuments(result.data);
+      })
+      .catch(() => {
+        if (active) setError("加载知识库失败，请检查网络后重试。");
+      })
+      .finally(() => {
+        if (active) setIsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // 持久化：fileList 变化时写入 localStorage
-  useEffect(() => {
-    localStorage.setItem("knowledgeFiles", JSON.stringify(fileList));
-  }, [fileList]);
-
-  // 触发文件选择
-  const handleUpload = () => {
-    inputRef.current?.click();
+  const refresh = async () => {
+    setIsLoading(true);
+    await loadDocuments();
   };
 
-  // 选择文件后处理（取消类型限制，所有文件均可上传）
-  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const uploadFiles = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
 
-    for (const file of Array.from(files)) {
-      const isPdf = file.type === "application/pdf";
-      const isImage = file.type.startsWith("image/");
-      const fileType = isPdf ? "pdf" : isImage ? "image" : "other";
-
-      const url = URL.createObjectURL(file);
-      const newItem: FileItem = {
-        id: Date.now().toString() + Math.random(),
-        name: file.name,
-        type: fileType,
-        url,
-        createTime: Date.now(),
-      };
-      setFileList((prev) => [newItem, ...prev]);
+    setError("");
+    setNotice("");
+    setIsUploading(true);
+    let uploadError = "";
+    try {
+      for (const file of files) {
+        const formData = new FormData();
+        formData.set("file", file);
+        formData.set("category", category);
+        formData.set("tags", tags);
+        const response = await fetch("/api/documents", {
+          method: "POST",
+          body: formData,
+        });
+        const result: unknown = await response.json();
+        if (!response.ok) {
+          const message =
+            typeof result === "object" &&
+            result !== null &&
+            "error" in result &&
+            typeof result.error === "string"
+              ? result.error
+              : "文件上传失败。";
+          uploadError = `${file.name}：${message}`;
+          break;
+        }
+      }
+      await refresh();
+      if (uploadError) setError(uploadError);
+      else setNotice("资料已安全保存到你的知识库。");
+    } catch {
+      setError("上传请求失败，请检查网络后重试。");
+    } finally {
+      setIsUploading(false);
     }
-
-    // 清空 input，允许重复选择同一文件
-    if (inputRef.current) inputRef.current.value = "";
   };
 
-  // 删除文件
-  const deleteFile = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止触发卡片点击预览
-    if (confirm("确定要删除这个文件吗？")) {
-      setFileList((prev) => prev.filter((f) => f.id !== id));
-      if (previewItem?.id === id) setPreviewItem(null);
+  const deleteDocument = async (document: KnowledgeDocument) => {
+    if (!window.confirm(`确定删除「${document.title}」吗？`)) return;
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`/api/documents/${document.id}`, {
+        method: "DELETE",
+      });
+      const result: unknown = await response.json();
+      if (!response.ok) {
+        const message =
+          typeof result === "object" &&
+          result !== null &&
+          "error" in result &&
+          typeof result.error === "string"
+            ? result.error
+            : "删除资料失败。";
+        setError(message);
+        return;
+      }
+      if (preview?.id === document.id) setPreview(null);
+      await refresh();
+      setNotice("资料已删除。");
+    } catch {
+      setError("删除资料失败，请检查网络后重试。");
     }
   };
+
+  const saveMetadata = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!editing) return;
+    setIsSaving(true);
+    setError("");
+    try {
+      const result = await updateKnowledgeMetadata(
+        editing.id,
+        editCategory,
+        editTags,
+      );
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      setEditing(null);
+      setNotice("分类和标签已更新。");
+      await refresh();
+    } catch {
+      setError("更新资料信息失败，请检查网络后重试。");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const visibleDocuments = documents.filter((document) => {
+    const searchable = [
+      document.title,
+      document.category,
+      ...document.tags,
+    ].join(" ").toLocaleLowerCase();
+    return searchable.includes(search.trim().toLocaleLowerCase());
+  });
 
   return (
-    <div>
-      {/* 顶部标题和上传按钮 */}
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-2xl font-bold text-black">📚 个人知识库</h1>
+    <section>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">个人知识库</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            PDF、TXT 和 Markdown；单文件最多 10 MB。
+          </p>
+        </div>
         <button
-          onClick={handleUpload}
-          className="px-5 py-2.5 bg-blue-700 hover:bg-blue-800 text-white font-semibold rounded-xl transition active:scale-[0.98]"
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          disabled={isUploading}
+          className="rounded-xl bg-blue-700 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
         >
-          + 上传文件
+          {isUploading ? "正在上传…" : "+ 上传资料"}
         </button>
-        {/* 去掉了 accept 属性，允许上传任何文件 */}
         <input
           ref={inputRef}
           type="file"
+          accept=".pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown"
           multiple
-          onChange={onFileChange}
+          onChange={uploadFiles}
           className="hidden"
         />
       </div>
 
-      {/* 文件列表或空状态 */}
-      {fileList.length === 0 ? (
-        <div className="bg-white rounded-3xl p-16 text-center border border-dashed border-blue-200 text-slate-500">
-          <div className="text-5xl mb-4 opacity-60">📭</div>
-          还没有文件，点击右上角「上传文件」添加文件吧
+      <div className="mb-6 grid gap-3 rounded-2xl border border-blue-100 bg-white p-4 sm:grid-cols-3">
+        <label className="text-sm text-slate-600">
+          上传分类
+          <input
+            value={category}
+            onChange={(event) => setCategory(event.target.value)}
+            maxLength={50}
+            placeholder="例如：数学"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
+          />
+        </label>
+        <label className="text-sm text-slate-600">
+          上传标签（逗号分隔）
+          <input
+            value={tags}
+            onChange={(event) => setTags(event.target.value)}
+            maxLength={500}
+            placeholder="例如：函数,复习"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
+          />
+        </label>
+        <label className="text-sm text-slate-600">
+          搜索资料
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="按名称、分类或标签搜索"
+            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
+          />
+        </label>
+      </div>
+
+      {error && (
+        <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
+          {notice}
+        </p>
+      )}
+
+      {isLoading ? (
+        <p className="rounded-2xl bg-white p-8 text-center text-slate-500">
+          正在加载资料…
+        </p>
+      ) : visibleDocuments.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-blue-200 bg-white p-12 text-center text-slate-500">
+          <div className="mb-4 text-5xl">📭</div>
+          {documents.length === 0
+            ? "还没有资料。上传 PDF、TXT 或 Markdown 文件开始建立知识库。"
+            : "没有找到匹配的资料。"}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {fileList.map((file) => (
-            <div
-              key={file.id}
-              onClick={() => setPreviewItem(file)}
-              className="bg-white rounded-2xl p-5 border border-blue-50 shadow-sm hover:shadow-lg transition group cursor-pointer relative"
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
+          {visibleDocuments.map((document) => (
+            <article
+              key={document.id}
+              className="rounded-2xl border border-blue-50 bg-white p-5 shadow-sm"
             >
-              {/* 预览区：根据类型显示不同图标 */}
-              <div className="h-36 mb-4 rounded-xl overflow-hidden bg-slate-50 flex items-center justify-center">
-                {file.type === "image" ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={file.url} alt={file.name} className="w-full h-full object-cover" />
-                ) : file.type === "pdf" ? (
-                  <div className="text-center">
-                    <div className="text-5xl mb-1">📄</div>
-                    <span className="text-xs text-slate-400">点击预览 PDF</span>
-                  </div>
-                ) : (
-                  <div className="text-center">
-                    <div className="text-5xl mb-1">📦</div>
-                    <span className="text-xs text-slate-400">点击查看/下载</span>
-                  </div>
-                )}
-              </div>
-
-              {/* 文件名 */}
-              <h3 className="font-semibold text-slate-800 truncate mb-1" title={file.name}>
-                {file.name}
-              </h3>
-
-              {/* 底部信息与操作区 */}
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">
-                <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                  {file.type === "other" ? "FILE" : file.type.toUpperCase()}
-                </span>
-                <div className="flex items-center gap-2">
-                  <span>{new Date(file.createTime).toLocaleDateString()}</span>
-                  
-                  {/* 修改为高亮红色的删除按钮 */}
-                  <button
-                    onClick={(e) => deleteFile(file.id, e)}
-                    className="opacity-0 group-hover:opacity-100 text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-1 rounded transition-all font-medium"
-                    title="删除"
-                  >
-                    删除
-                  </button>
+              <button
+                type="button"
+                onClick={() => setPreview(document)}
+                className="block w-full text-left"
+              >
+                <div className="mb-3 flex h-24 items-center justify-center rounded-xl bg-slate-50 text-4xl">
+                  {document.mime_type === "application/pdf" ? "📄" : "📝"}
                 </div>
+                <h2 className="truncate font-semibold text-slate-800" title={document.title}>
+                  {document.title}
+                </h2>
+              </button>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">
+                  {document.category || "未分类"}
+                </span>
+                {document.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-full bg-slate-100 px-2 py-1 text-slate-600"
+                  >
+                    {tag}
+                  </span>
+                ))}
               </div>
-            </div>
+              <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3 text-xs text-slate-400">
+                <span>{new Date(document.created_at).toLocaleDateString()}</span>
+                <span>{(document.size_bytes / 1024).toFixed(0)} KB</span>
+              </div>
+              <div className="mt-3 flex justify-end gap-3 text-sm">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditing(document);
+                    setEditCategory(document.category);
+                    setEditTags(document.tags.join(", "));
+                    setError("");
+                  }}
+                  className="text-blue-700 hover:text-blue-900"
+                >
+                  分类/标签
+                </button>
+                <a
+                  href={`/api/documents/${document.id}/download`}
+                  className="text-blue-700 hover:text-blue-900"
+                >
+                  下载
+                </a>
+                <button
+                  type="button"
+                  onClick={() => void deleteDocument(document)}
+                  className="text-red-600 hover:text-red-800"
+                >
+                  删除
+                </button>
+              </div>
+            </article>
           ))}
         </div>
       )}
 
-      {/* 预览弹层 */}
-      {previewItem && (
+      {preview && (
         <div
-          className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-6"
-          onClick={() => setPreviewItem(null)}
+          role="presentation"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setPreview(null)}
         >
           <div
-            className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={preview.title}
+            className="flex h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white"
+            onClick={(event) => event.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-slate-100">
-              <h3 className="font-semibold text-slate-800 truncate">{previewItem.name}</h3>
+            <div className="flex items-center justify-between border-b p-4">
+              <h2 className="truncate font-semibold text-slate-800">{preview.title}</h2>
               <button
-                onClick={() => setPreviewItem(null)}
-                className="text-slate-400 hover:text-slate-700 text-xl leading-none px-2"
+                type="button"
+                onClick={() => setPreview(null)}
+                aria-label="关闭预览"
+                className="px-2 text-xl text-slate-500"
               >
-                ✕
+                ×
               </button>
             </div>
-            
-            <div className="flex-1 overflow-auto p-4 bg-slate-50 flex items-center justify-center">
-              {previewItem.type === "image" ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={previewItem.url} alt={previewItem.name} className="max-w-full max-h-[75vh] object-contain" />
-              ) : previewItem.type === "pdf" ? (
-                <iframe src={previewItem.url} title={previewItem.name} className="w-full h-[75vh] rounded-lg" />
-              ) : (
-                // 其他文件类型的预览提示与下载按钮
-                <div className="text-center">
-                  <div className="text-6xl mb-4">📦</div>
-                  <p className="text-slate-600 mb-6">当前文件格式暂不支持网页直接预览</p>
-                  <a
-                    href={previewItem.url}
-                    download={previewItem.name}
-                    className="inline-block bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-medium transition"
-                  >
-                    下载到本地查看
-                  </a>
-                </div>
-              )}
-            </div>
+            <iframe
+              title={preview.title}
+              src={`/api/documents/${preview.id}/download`}
+              className="min-h-0 flex-1 bg-slate-50"
+            />
           </div>
         </div>
       )}
-    </div>
+
+      {editing && (
+        <div
+          role="presentation"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setEditing(null)}
+        >
+          <form
+            aria-label="编辑资料分类和标签"
+            onSubmit={saveMetadata}
+            onClick={(event) => event.stopPropagation()}
+            className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6"
+          >
+            <h2 className="text-lg font-semibold text-slate-900">编辑资料信息</h2>
+            <label className="block text-sm text-slate-600">
+              分类
+              <input
+                value={editCategory}
+                onChange={(event) => setEditCategory(event.target.value)}
+                maxLength={50}
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-slate-900"
+              />
+            </label>
+            <label className="block text-sm text-slate-600">
+              标签（逗号分隔，最多 10 个）
+              <input
+                value={editTags}
+                onChange={(event) => setEditTags(event.target.value)}
+                maxLength={500}
+                className="mt-1 w-full rounded-lg border px-3 py-2 text-slate-900"
+              />
+            </label>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setEditing(null)}
+                className="rounded-lg border px-4 py-2 text-slate-700"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="rounded-lg bg-blue-700 px-4 py-2 text-white disabled:opacity-50"
+              >
+                {isSaving ? "保存中…" : "保存"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </section>
   );
 }
