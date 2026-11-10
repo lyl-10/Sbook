@@ -20,7 +20,8 @@
 - Supabase Auth、Postgres 和 Storage
 - pnpm
 
-## 部署到 Vercel
+<!-- 给开发人员 -->
+## 部署到 Vercel（已经）
 
 ### 1. 初始化 Supabase
 
@@ -48,7 +49,7 @@
 
 将仓库导入 Vercel 并部署。部署完成后打开站点注册并登录；如果尚未应用 Supabase 迁移或配置环境变量，相关功能将无法正常使用。
 
-## 本地开发
+## 本地开发（重要）
 
 ### 环境要求
 
@@ -79,7 +80,7 @@
 
 4. 打开 <http://localhost:3000>，注册账号后登录。
 
-## AI 问答（可选）
+## AI 问
 
 在 Vercel 环境变量或本地 `.env.local` 中配置 DeepSeek 服务端变量，然后重新部署或重启开发服务器：
 
