@@ -11,7 +11,7 @@
 - 提取资料文本并进行关键词检索。暂不支持扫描件 OCR 和图片识别。
 - 新增、编辑和删除错题，记录答案、解析和知识点。
 - 从错题中选择练习，保存作答记录并查看最近记录。
-- 对个人资料进行检索问答，展示可核对的原文引用；可选接入兼容 OpenAI Chat Completions 的模型服务。
+- 对个人资料进行检索问答，展示可核对的原文引用；可选接入 DeepSeek API（兼容 OpenAI Chat Completions）。
 - 数据库启用行级安全策略，资料文件存储在 Supabase 私有存储桶中。
 
 ## 技术栈
@@ -38,9 +38,9 @@
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | 是 | Supabase 项目的 Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 是 | Supabase 项目的 anon/publishable key |
-| `AI_API_KEY` | 否 | 模型服务 API 密钥；不配置时仍可检索资料和查看引用 |
-| `AI_MODEL` | 否 | 模型名称；配置 AI 问答时必填 |
-| `AI_BASE_URL` | 否 | OpenAI-compatible API 地址，默认 `https://api.openai.com/v1` |
+| `AI_API_KEY` | 否 | DeepSeek API 密钥；配置 AI 问答时必填 |
+| `AI_MODEL` | 否 | 模型名称；配置 AI 问答时必填，DeepSeek 可用 `deepseek-chat` |
+| `AI_BASE_URL` | 否 | DeepSeek API 地址；使用 DeepSeek 时设置为 `https://api.deepseek.com` |
 
 `NEXT_PUBLIC_*` 变量会在 Next.js 构建时写入客户端产物；修改后请重新部署。不要将 Supabase `service_role` 密钥放入 `NEXT_PUBLIC_*` 变量，也不要提交任何密钥到仓库。
 
@@ -81,12 +81,12 @@
 
 ## AI 问答（可选）
 
-在 Vercel 环境变量或本地 `.env.local` 中配置服务端变量，然后重新部署或重启开发服务器：
+在 Vercel 环境变量或本地 `.env.local` 中配置 DeepSeek 服务端变量，然后重新部署或重启开发服务器：
 
 ```dotenv
-AI_BASE_URL=https://api.openai.com/v1
-AI_API_KEY=your-server-side-api-key
-AI_MODEL=your-chat-model
+AI_BASE_URL=https://api.deepseek.com
+AI_API_KEY=your-deepseek-api-key
+AI_MODEL=deepseek-chat
 ```
 
 只有检索到相关资料后才会请求模型。未配置模型、没有相关资料或模型请求失败时，界面会明确反馈，并保留可查看的资料引用。
