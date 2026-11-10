@@ -5,6 +5,42 @@ import { useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
+const authErrorMessages: Record<string, string> = {
+  invalid_credentials: "邮箱或密码错误，请检查后重试。",
+  email_not_confirmed: "邮箱尚未验证，请先完成邮箱验证后再登录。",
+  user_already_exists: "该邮箱已注册，请直接登录或使用其他邮箱。",
+  email_exists: "该邮箱已注册，请直接登录或使用其他邮箱。",
+  weak_password: "密码强度不足，请更换更复杂的密码。",
+  email_address_invalid: "邮箱地址无效，请检查后重试。",
+  signup_disabled: "当前暂不开放注册，请联系管理员。",
+  email_provider_disabled: "邮箱注册暂不可用，请稍后重试。",
+  over_email_send_rate_limit: "邮件发送过于频繁，请稍后再试。",
+  over_request_rate_limit: "请求过于频繁，请稍后再试。",
+  too_many_requests: "请求过于频繁，请稍后再试。",
+};
+
+function getAuthErrorMessage(
+  error: { code?: string; message: string },
+  isRegistering: boolean,
+) {
+  if (error.code && authErrorMessages[error.code]) {
+    return authErrorMessages[error.code];
+  }
+
+  const message = error.message.toLowerCase();
+  if (message.includes("invalid login credentials")) {
+    return authErrorMessages.invalid_credentials;
+  }
+  if (message.includes("user already registered")) {
+    return authErrorMessages.user_already_exists;
+  }
+  if (message.includes("email not confirmed")) {
+    return authErrorMessages.email_not_confirmed;
+  }
+
+  return isRegistering ? "注册失败，请检查填写信息后重试。" : "登录失败，请稍后重试。";
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -38,7 +74,7 @@ export default function LoginPage() {
           password,
         });
         if (signUpError) {
-          setError(signUpError.message);
+          setError(getAuthErrorMessage(signUpError, true));
         } else if (data.session) {
           router.replace("/");
           router.refresh();
@@ -51,16 +87,14 @@ export default function LoginPage() {
           password,
         });
         if (signInError) {
-          setError(signInError.message);
+          setError(getAuthErrorMessage(signInError, false));
         } else {
           router.replace("/");
           router.refresh();
         }
       }
-    } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : "登录服务暂时不可用，请重试。",
-      );
+    } catch {
+      setError("认证服务暂时不可用，请检查网络后重试。");
     } finally {
       setIsSubmitting(false);
     }

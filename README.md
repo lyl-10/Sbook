@@ -20,8 +20,9 @@
 - Supabase Auth、Postgres 和 Storage
 - pnpm
 
-<!-- 给开发人员 -->
-## 部署到 Vercel（已经）
+> 给开发人员↓
+
+## 部署到 Vercel（已经)
 
 ### 1. 初始化 Supabase
 
@@ -65,7 +66,7 @@
    pnpm install
    ```
 
-2. 在项目根目录创建 `.env.local`，填入 Supabase 配置：
+2. 在项目根目录创建 `.env.local`，填入 Supabase 配置（已经）：
 
    ```dotenv
    NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
@@ -80,7 +81,7 @@
 
 4. 打开 <http://localhost:3000>，注册账号后登录。
 
-## AI 问
+## AI 问答（已经）
 
 在 Vercel 环境变量或本地 `.env.local` 中配置 DeepSeek 服务端变量，然后重新部署或重启开发服务器：
 
