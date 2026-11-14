@@ -1,4 +1,6 @@
 import { redirect } from "next/navigation";
+import { ChatMessagesProvider } from "@/components/ChatMessagesProvider";
+import { ProtectedDataProvider } from "@/components/ProtectedDataProvider";
 import Sidebar from "@/components/Sidebar";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -21,7 +23,11 @@ export default async function ProtectedLayout({
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Sidebar email={user.email ?? ""} />
-      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">{children}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">
+        <ProtectedDataProvider>
+          <ChatMessagesProvider>{children}</ChatMessagesProvider>
+        </ProtectedDataProvider>
+      </main>
     </div>
   );
 }

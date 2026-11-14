@@ -7,19 +7,34 @@ import {
   listWrongQuestions,
   submitPracticeAttempt,
 } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { useProtectedData } from "@/components/ProtectedDataProvider";
 import type { PracticeAttempt, WrongQuestion } from "@/lib/database.types";
 
+const EMPTY_QUESTIONS: WrongQuestion[] = [];
+const EMPTY_ATTEMPTS: PracticeAttempt[] = [];
+
 export default function PracticePage() {
-  const [questions, setQuestions] = useState<WrongQuestion[]>([]);
-  const [attempts, setAttempts] = useState<PracticeAttempt[]>([]);
-  const [questionId, setQuestionId] = useState("");
+  const {
+    wrongQuestions: cachedQuestions,
+    setWrongQuestions: setCachedQuestions,
+    practiceAttempts: cachedAttempts,
+    setPracticeAttempts: setCachedAttempts,
+  } = useProtectedData();
+  const questions = cachedQuestions ?? EMPTY_QUESTIONS;
+  const attempts = cachedAttempts ?? EMPTY_ATTEMPTS;
+  const [questionId, setQuestionId] = useState(
+    () => cachedQuestions?.[0]?.id ?? "",
+  );
   const [answer, setAnswer] = useState("");
   const [result, setResult] = useState<{
     correctAnswer: string;
     explanation: string;
   } | null>(null);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(
+    cachedQuestions === null || cachedAttempts === null,
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const loadPracticeData = async () => {
@@ -29,7 +44,7 @@ export default function PracticePage() {
     ]);
     if ("error" in questionResult) setError(questionResult.error);
     else {
-      setQuestions(questionResult.data);
+      setCachedQuestions(questionResult.data);
       setQuestionId((current) =>
         questionResult.data.some((question) => question.id === current)
           ? current
@@ -37,18 +52,29 @@ export default function PracticePage() {
       );
     }
     if ("error" in attemptResult) setError(attemptResult.error);
-    else setAttempts(attemptResult.data);
+    else setCachedAttempts(attemptResult.data);
     setIsLoading(false);
   };
 
   useEffect(() => {
+    if (cachedQuestions !== null && cachedAttempts !== null) return;
+
     let active = true;
-    void Promise.all([listWrongQuestions(), listPracticeAttempts()])
+    const questionRequest =
+      cachedQuestions === null
+        ? listWrongQuestions()
+        : Promise.resolve({ data: cachedQuestions });
+    const attemptRequest =
+      cachedAttempts === null
+        ? listPracticeAttempts()
+        : Promise.resolve({ data: cachedAttempts });
+
+    void Promise.all([questionRequest, attemptRequest])
       .then(([questionResult, attemptResult]) => {
         if (!active) return;
         if ("error" in questionResult) setError(questionResult.error);
         else {
-          setQuestions(questionResult.data);
+          setCachedQuestions(questionResult.data);
           setQuestionId((current) =>
             questionResult.data.some((question) => question.id === current)
               ? current
@@ -56,7 +82,7 @@ export default function PracticePage() {
           );
         }
         if ("error" in attemptResult) setError(attemptResult.error);
-        else setAttempts(attemptResult.data);
+        else setCachedAttempts(attemptResult.data);
       })
       .catch(() => {
         if (active) setError("加载练习数据失败，请检查网络后重试。");
@@ -67,7 +93,12 @@ export default function PracticePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [
+    cachedQuestions,
+    cachedAttempts,
+    setCachedQuestions,
+    setCachedAttempts,
+  ]);
 
   const refresh = async () => {
     setIsLoading(true);
@@ -175,13 +206,13 @@ export default function PracticePage() {
                   className="mt-1 w-full resize-y rounded-lg border border-slate-200 p-3 text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </label>
-              <button
+              <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="mt-4 rounded-lg bg-blue-700 px-6 py-3 font-medium text-white hover:bg-blue-800 disabled:opacity-50"
+                className="mt-4 h-auto rounded-lg bg-blue-700 px-6 py-3 font-medium text-white hover:bg-blue-800 disabled:opacity-50"
               >
                 {isSubmitting ? "保存作答中…" : "提交并保存作答"}
-              </button>
+              </Button>
             </form>
           )}
 

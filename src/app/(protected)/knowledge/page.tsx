@@ -2,10 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { listKnowledgeDocuments, updateKnowledgeMetadata } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { useProtectedData } from "@/components/ProtectedDataProvider";
 import type { KnowledgeDocument } from "@/lib/database.types";
 
 export default function KnowledgePage() {
-  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const { knowledgeDocuments: documents, setKnowledgeDocuments: setDocuments } =
+    useProtectedData();
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
   const [search, setSearch] = useState("");
@@ -15,7 +18,7 @@ export default function KnowledgePage() {
   const [editTags, setEditTags] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(documents === null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -31,6 +34,8 @@ export default function KnowledgePage() {
   };
 
   useEffect(() => {
+    if (documents !== null) return;
+
     let active = true;
     void listKnowledgeDocuments()
       .then((result) => {
@@ -47,7 +52,7 @@ export default function KnowledgePage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [documents, setDocuments]);
 
   const refresh = async () => {
     setIsLoading(true);
@@ -149,7 +154,8 @@ export default function KnowledgePage() {
     }
   };
 
-  const visibleDocuments = documents.filter((document) => {
+  const documentList = documents ?? [];
+  const visibleDocuments = documentList.filter((document) => {
     const searchable = [
       document.title,
       document.category,
@@ -167,14 +173,14 @@ export default function KnowledgePage() {
             PDF、TXT、Markdown 和 PNG；单文件最多 10 MB。知识库中的 PNG 暂不自动识别文字，可在聊天中附加 PNG 让 AI 识图。
           </p>
         </div>
-        <button
+        <Button
           type="button"
           onClick={() => inputRef.current?.click()}
           disabled={isUploading}
-          className="rounded-xl bg-blue-700 px-5 py-2.5 font-semibold text-white transition hover:bg-blue-800 disabled:opacity-50"
+          className="h-auto rounded-xl bg-blue-700 px-5 py-2.5 font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
         >
           {isUploading ? "正在上传…" : "+ 上传资料"}
-        </button>
+        </Button>
         <input
           ref={inputRef}
           type="file"
@@ -235,7 +241,7 @@ export default function KnowledgePage() {
       ) : visibleDocuments.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-blue-200 bg-white p-12 text-center text-slate-500">
           <div className="mb-4 text-5xl">📭</div>
-          {documents.length === 0
+          {documentList.length === 0
             ? "还没有资料。上传 PDF、TXT、Markdown 或 PNG 文件开始建立知识库。"
             : "没有找到匹配的资料。"}
         </div>
@@ -246,10 +252,11 @@ export default function KnowledgePage() {
               key={document.id}
               className="rounded-2xl border border-blue-50 bg-white p-5 shadow-sm"
             >
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => setPreview(document)}
-                className="block w-full text-left"
+                className="h-auto w-full flex-col items-stretch justify-start rounded-lg p-0 text-left text-slate-800 hover:bg-slate-50"
               >
                 <div className="mb-3 flex h-24 items-center justify-center rounded-xl bg-slate-50 text-4xl">
                   {document.mime_type === "application/pdf"
@@ -261,7 +268,7 @@ export default function KnowledgePage() {
                 <h2 className="truncate font-semibold text-slate-800" title={document.title}>
                   {document.title}
                 </h2>
-              </button>
+              </Button>
               <div className="mt-3 flex flex-wrap gap-2 text-xs">
                 <span className="rounded-full bg-blue-50 px-2 py-1 text-blue-700">
                   {document.category || "未分类"}
@@ -280,7 +287,8 @@ export default function KnowledgePage() {
                 <span>{(document.size_bytes / 1024).toFixed(0)} KB</span>
               </div>
               <div className="mt-3 flex justify-end gap-3 text-sm">
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => {
                     setEditing(document);
@@ -288,23 +296,24 @@ export default function KnowledgePage() {
                     setEditTags(document.tags.join(", "));
                     setError("");
                   }}
-                  className="text-blue-700 hover:text-blue-900"
+                  className="h-auto p-0 text-blue-700 hover:bg-transparent hover:text-blue-900 hover:underline"
                 >
                   分类/标签
-                </button>
+                </Button>
                 <a
                   href={`/api/documents/${document.id}/download`}
                   className="text-blue-700 hover:text-blue-900"
                 >
                   下载
                 </a>
-                <button
+                <Button
+                  variant="ghost"
                   type="button"
                   onClick={() => void deleteDocument(document)}
-                  className="text-red-600 hover:text-red-800"
+                  className="h-auto p-0 text-red-600 hover:bg-transparent hover:text-red-800 hover:underline"
                 >
                   删除
-                </button>
+                </Button>
               </div>
             </article>
           ))}
@@ -326,14 +335,15 @@ export default function KnowledgePage() {
           >
             <div className="flex items-center justify-between border-b p-4">
               <h2 className="truncate font-semibold text-slate-800">{preview.title}</h2>
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => setPreview(null)}
                 aria-label="关闭预览"
-                className="px-2 text-xl text-slate-500"
+                className="h-auto px-2 py-1 text-xl text-slate-500 hover:bg-slate-100"
               >
                 ×
-              </button>
+              </Button>
             </div>
             {preview.mime_type === "image/png" ? (
               <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-50 p-4">
@@ -387,20 +397,21 @@ export default function KnowledgePage() {
               />
             </label>
             <div className="flex justify-end gap-3">
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() => setEditing(null)}
-                className="rounded-lg border px-4 py-2 text-slate-700"
+                className="h-auto rounded-lg px-4 py-2 text-slate-700"
               >
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-lg bg-blue-700 px-4 py-2 text-white disabled:opacity-50"
+                className="h-auto rounded-lg bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 disabled:opacity-50"
               >
                 {isSaving ? "保存中…" : "保存"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>

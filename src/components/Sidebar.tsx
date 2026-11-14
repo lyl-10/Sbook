@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const navItems = [
@@ -69,17 +70,18 @@ export default function Sidebar({ email }: { email: string }) {
         })}
       </nav>
 
-      <button
+      <Button
+        variant="ghost"
         onClick={handleLogout}
         disabled={isSigningOut}
         title={email}
-        className="mt-4 flex items-center justify-center gap-3 rounded-xl px-2 py-3 text-sm font-medium text-red-500 transition hover:bg-red-50 disabled:opacity-50 sm:justify-start sm:px-3 lg:px-4"
+        className="mt-4 h-auto flex items-center justify-center gap-3 rounded-xl px-2 py-3 text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 sm:justify-start sm:px-3 lg:px-4"
       >
         <span className="w-7 text-center text-xl">🚪</span>
         <span className="hidden sm:inline">
           {isSigningOut ? "退出中…" : "退出登录"}
         </span>
-      </button>
+      </Button>
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
     </aside>
   );

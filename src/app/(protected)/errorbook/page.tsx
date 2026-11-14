@@ -6,6 +6,8 @@ import {
   listWrongQuestions,
   saveWrongQuestion,
 } from "@/app/actions";
+import { Button } from "@/components/ui/button";
+import { useProtectedData } from "@/components/ProtectedDataProvider";
 import type { WrongQuestion } from "@/lib/database.types";
 
 type QuestionForm = {
@@ -23,13 +25,14 @@ const EMPTY_FORM: QuestionForm = {
 };
 
 export default function ErrorBookPage() {
-  const [questions, setQuestions] = useState<WrongQuestion[]>([]);
+  const { wrongQuestions: questions, setWrongQuestions: setQuestions } =
+    useProtectedData();
   const [editing, setEditing] = useState<WrongQuestion | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [form, setForm] = useState<QuestionForm>(EMPTY_FORM);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(questions === null);
   const [isSaving, setIsSaving] = useState(false);
 
   const loadQuestions = async () => {
@@ -43,6 +46,8 @@ export default function ErrorBookPage() {
   };
 
   useEffect(() => {
+    if (questions !== null) return;
+
     let active = true;
     void listWrongQuestions()
       .then((result) => {
@@ -59,7 +64,7 @@ export default function ErrorBookPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [questions, setQuestions]);
 
   const refresh = async () => {
     setIsLoading(true);
@@ -121,6 +126,8 @@ export default function ErrorBookPage() {
     }
   };
 
+  const questionList = questions ?? [];
+
   return (
     <section>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
@@ -130,13 +137,13 @@ export default function ErrorBookPage() {
             手动记录题目、正确答案、解析和知识点；自动 OCR 暂不包含在 MVP。
           </p>
         </div>
-        <button
+        <Button
           type="button"
           onClick={openNewQuestion}
-          className="rounded-xl bg-blue-700 px-5 py-2.5 font-semibold text-white hover:bg-blue-800"
+          className="h-auto rounded-xl bg-blue-700 px-5 py-2.5 font-semibold text-white hover:bg-blue-800"
         >
           + 录入错题
-        </button>
+        </Button>
       </div>
 
       {error && (
@@ -154,13 +161,13 @@ export default function ErrorBookPage() {
         <h2 className="mb-4 text-lg font-semibold text-slate-900">已保存的错题</h2>
         {isLoading ? (
           <p className="py-8 text-center text-slate-500">正在加载错题…</p>
-        ) : questions.length === 0 ? (
+        ) : questionList.length === 0 ? (
           <p className="py-8 text-center text-slate-500">
             暂无错题。添加题目后，可以在「练习」页面提交和回看作答记录。
           </p>
         ) : (
           <ul className="divide-y divide-slate-100">
-            {questions.map((question) => (
+            {questionList.map((question) => (
               <li
                 key={question.id}
                 className="flex flex-wrap items-start justify-between gap-4 py-4"
@@ -189,20 +196,22 @@ export default function ErrorBookPage() {
                   )}
                 </div>
                 <div className="flex shrink-0 gap-3 text-sm">
-                  <button
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => openEditQuestion(question)}
-                    className="text-blue-700 hover:text-blue-900"
+                    className="h-auto p-0 text-blue-700 hover:bg-transparent hover:text-blue-900 hover:underline"
                   >
                     编辑
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
                     type="button"
                     onClick={() => void removeQuestion(question)}
-                    className="text-red-600 hover:text-red-800"
+                    className="h-auto p-0 text-red-600 hover:bg-transparent hover:text-red-800 hover:underline"
                   >
                     删除
-                  </button>
+                  </Button>
                 </div>
               </li>
             ))}
@@ -281,20 +290,21 @@ export default function ErrorBookPage() {
               />
             </label>
             <div className="flex items-center justify-end gap-3">
-              <button
+              <Button
+                variant="outline"
                 type="button"
                 onClick={() => setIsCreating(false)}
-                className="rounded-lg border px-4 py-2 text-slate-700"
+                className="h-auto rounded-lg px-4 py-2 text-slate-700"
               >
                 取消
-              </button>
-              <button
+              </Button>
+              <Button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-lg bg-blue-700 px-4 py-2 text-white disabled:opacity-50"
+                className="h-auto rounded-lg bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 disabled:opacity-50"
               >
                 {isSaving ? "保存中…" : "保存错题"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>

@@ -4,6 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 const authErrorMessages: Record<string, string> = {
   invalid_credentials: "邮箱或密码错误，请检查后重试。",
@@ -120,25 +123,25 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label htmlFor="email" className="block text-slate-700 font-medium mb-2">
+            <Label htmlFor="email" className="mb-2 block text-slate-700">
               邮箱
-            </label>
-            <input
+            </Label>
+            <Input
               id="email"
               type="email"
               autoComplete="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition text-black"
+              className="h-auto rounded-xl border-gray-300 px-4 py-3 text-black focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-200"
               placeholder="name@example.com"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-slate-700 font-medium mb-2">
+            <Label htmlFor="password" className="mb-2 block text-slate-700">
               密码
-            </label>
-            <input
+            </Label>
+            <Input
               id="password"
               type="password"
               autoComplete={isRegistering ? "new-password" : "current-password"}
@@ -146,7 +149,7 @@ export default function LoginPage() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition text-black"
+              className="h-auto rounded-xl border-gray-300 px-4 py-3 text-black focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-200"
               placeholder="至少 8 位"
             />
           </div>
@@ -154,30 +157,31 @@ export default function LoginPage() {
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
           {message && <p className="text-green-700 text-sm text-center">{message}</p>}
 
-          <button
+          <Button
             type="submit"
             disabled={!configured || isSubmitting}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 text-white font-semibold rounded-xl transition active:scale-[0.98] mt-4"
+            className="mt-4 h-auto w-full rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting
               ? "请稍候…"
               : isRegistering
                 ? "注册账号"
                 : "登录进入系统"}
-          </button>
+          </Button>
         </form>
 
-        <button
+        <Button
+          variant="link"
           type="button"
           onClick={() => {
             setIsRegistering((value) => !value);
             setError("");
             setMessage("");
           }}
-          className="mt-5 w-full text-sm text-blue-700 hover:text-blue-900"
+          className="mt-5 h-auto w-full text-sm font-normal text-blue-700 hover:text-blue-900"
         >
           {isRegistering ? "已有账号？返回登录" : "还没有账号？立即注册"}
-        </button>
+        </Button>
       </div>
     </div>
   );

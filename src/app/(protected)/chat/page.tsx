@@ -3,15 +3,11 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-
-type Citation = { id: string; title: string; excerpt: string };
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  citations?: Citation[];
-  image?: string;
-};
+import { Button } from "@/components/ui/button";
+import {
+  useChatMessages,
+  type ChatCitation,
+} from "@/components/ChatMessagesProvider";
 
 const maxChatImageBytes = 3 * 1024 * 1024;
 
@@ -30,7 +26,7 @@ function readImageAsDataUrl(file: File): Promise<string> {
   });
 }
 
-function isCitation(value: unknown): value is Citation {
+function isCitation(value: unknown): value is ChatCitation {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -50,7 +46,7 @@ const suggestions = [
 ];
 
 export default function ChatPage() {
-  const [messages, setMessages] = useState<Message[]>([]);
+  const { messages, setMessages } = useChatMessages();
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -170,14 +166,15 @@ export default function ChatPage() {
             <p className="mt-0.5 text-sm text-slate-500">基于个人资料的 AI 学习伙伴</p>
           </div>
         </div>
-        <button
+        <Button
+          variant="outline"
           type="button"
           onClick={() => setMessages([])}
           disabled={messages.length === 0 || isSending}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 transition hover:border-blue-200 hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className="h-auto rounded-lg border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:border-blue-200 hover:bg-white hover:text-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
           清空对话
-        </button>
+        </Button>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
@@ -203,14 +200,15 @@ export default function ChatPage() {
               </p>
               <div className="mt-6 flex max-w-2xl flex-wrap justify-center gap-2">
                 {suggestions.map((suggestion) => (
-                  <button
+                  <Button
+                    variant="outline"
                     key={suggestion}
                     type="button"
                     onClick={() => setQuestion(suggestion)}
-                    className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
+                    className="h-auto rounded-full border-slate-200 bg-white px-4 py-2 text-sm text-slate-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700"
                   >
                     {suggestion}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -320,15 +318,16 @@ export default function ChatPage() {
               <span className="min-w-0 flex-1 truncate text-sm text-slate-600">
                 {selectedImage.file.name}
               </span>
-              <button
+              <Button
+                variant="ghost"
                 type="button"
                 onClick={() => setSelectedImage(null)}
                 disabled={isSending}
                 aria-label="移除图片"
-                className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-white hover:text-red-600 disabled:opacity-50"
+                className="h-auto rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-white hover:text-red-600 disabled:opacity-50"
               >
                 移除
-              </button>
+              </Button>
             </div>
           )}
           <div className="flex items-end gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-2 transition focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100">
@@ -366,23 +365,24 @@ export default function ChatPage() {
                 });
               }}
             />
-            <button
+            <Button
+              variant="outline"
               type="button"
               onClick={() => imageInputRef.current?.click()}
               disabled={isSending}
               aria-label="附加 PNG 图片"
-              className="flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
+              className="h-10 shrink-0 rounded-xl border-slate-200 bg-white px-3 text-sm text-slate-600 hover:border-blue-300 hover:bg-white hover:text-blue-700 disabled:opacity-50"
             >
               + PNG
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={(!question.trim() && !selectedImage) || isSending}
               aria-label="发送问题"
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-lg text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
+              className="size-10 shrink-0 rounded-xl bg-blue-700 p-0 text-lg text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-100"
             >
               ↑
-            </button>
+            </Button>
           </div>
           <div className="mt-2 flex justify-between px-1 text-xs text-slate-400">
             <span>PNG 最大 3 MB · Enter 发送 · Shift + Enter 换行</span>
