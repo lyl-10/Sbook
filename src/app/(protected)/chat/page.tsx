@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type Citation = { id: string; title: string; excerpt: string };
 type Message = {
@@ -185,30 +187,51 @@ export default function ChatPage() {
                     : "rounded-bl-md border border-slate-100 bg-slate-50 text-slate-800"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{message.content}</p>
-                {message.citations && message.citations.length > 0 && (
-                  <div className="mt-4 space-y-2 border-t border-slate-200 pt-3">
-                    <h2 className="text-xs font-semibold tracking-wide text-slate-500">参考资料</h2>
-                    {message.citations.map((citation, index) => (
-                      <figure key={citation.id} className="rounded-xl border border-slate-200 bg-white p-3">
-                        <figcaption className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
-                          <span className="min-w-0 truncate">
-                            <span className="mr-2 text-blue-700">[{index + 1}]</span>
-                            {citation.title}
+                {message.role === "assistant" ? (
+                  <div className="break-words [&_a]:text-blue-700 [&_a]:underline [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-200/70 [&_code]:px-1 [&_code]:py-0.5 [&_h1]:mb-2 [&_h1]:mt-5 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-900 [&_pre]:p-3 [&_pre]:text-slate-100 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        img: ({ alt }) => (
+                          <span className="text-slate-500">
+                            {alt ? `[图片：${alt}]` : "[图片]"}
                           </span>
-                          <a
-                            href={`/api/documents/${citation.id}/download`}
-                            className="shrink-0 text-blue-700 hover:underline"
-                          >
-                            查看
-                          </a>
-                        </figcaption>
-                        <blockquote className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-500">
-                          {citation.excerpt}
-                        </blockquote>
-                      </figure>
-                    ))}
+                        ),
+                      }}
+                    >
+                      {message.content}
+                    </ReactMarkdown>
                   </div>
+                ) : (
+                  <p className="whitespace-pre-wrap">{message.content}</p>
+                )}
+                {message.citations && message.citations.length > 0 && (
+                  <details className="mt-4 border-t border-slate-200 pt-3">
+                    <summary className="cursor-pointer text-xs font-semibold tracking-wide text-slate-500 hover:text-blue-700">
+                      参考资料（{message.citations.length}）
+                    </summary>
+                    <div className="mt-3 space-y-2">
+                      {message.citations.map((citation, index) => (
+                        <figure key={citation.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                          <figcaption className="flex items-center justify-between gap-3 text-xs font-medium text-slate-700">
+                            <span className="min-w-0 truncate">
+                              <span className="mr-2 text-blue-700">[{index + 1}]</span>
+                              {citation.title}
+                            </span>
+                            <a
+                              href={`/api/documents/${citation.id}/download`}
+                              className="shrink-0 text-blue-700 hover:underline"
+                            >
+                              查看
+                            </a>
+                          </figcaption>
+                          <blockquote className="mt-2 whitespace-pre-wrap text-xs leading-5 text-slate-500">
+                            {citation.excerpt}
+                          </blockquote>
+                        </figure>
+                      ))}
+                    </div>
+                  </details>
                 )}
               </div>
             </article>

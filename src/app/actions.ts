@@ -294,15 +294,15 @@ function searchTerms(query: string) {
   return [...terms];
 }
 
-function findExcerpt(content: string, terms: string[]) {
+function findExcerpt(content: string, terms: string[], maxLength = 650) {
   const normalized = content.toLocaleLowerCase();
   const firstMatch = terms
     .map((term) => normalized.indexOf(term.toLocaleLowerCase()))
     .filter((index) => index >= 0)
     .sort((a, b) => a - b)[0];
   const start = Math.max(0, (firstMatch ?? 0) - 180);
-  const excerpt = content.slice(start, start + 650).trim();
-  return `${start > 0 ? "…" : ""}${excerpt}${start + 650 < content.length ? "…" : ""}`;
+  const excerpt = content.slice(start, start + maxLength).trim();
+  return `${start > 0 ? "…" : ""}${excerpt}${start + maxLength < content.length ? "…" : ""}`;
 }
 
 export async function askKnowledgeQuestion(
@@ -324,10 +324,17 @@ export async function askKnowledgeQuestion(
   if (error) return { error: `检索知识库失败：${error.message}` };
 
   const terms = searchTerms(question);
-  const matches = (documents ?? [])
+  const broadRequest = /(总结|概括|重点|核心概念|复习提纲|提纲|梳理|归纳|复习)/u.test(
+    question,
+  );
+  const textDocuments = (documents ?? []).filter(
+    (document) => document.extracted_text.trim().length > 0,
+  );
+  const matches = textDocuments
     .map((document) => {
       const content = document.extracted_text;
-      const normalized = content.toLocaleLowerCase();
+      const normalized =
+        `${content} ${document.title} ${document.category} ${document.tags.join(" ")}`.toLocaleLowerCase();
       const score =
         (normalized.includes(question.toLocaleLowerCase()) ? 5 : 0) +
         terms.reduce((total, term) => total + (normalized.includes(term) ? 1 : 0), 0);
@@ -337,22 +344,37 @@ export async function askKnowledgeQuestion(
     .sort((a, b) => b.score - a.score)
     .slice(0, 3);
 
-  if (matches.length === 0) {
+  const sources = broadRequest
+    ? textDocuments.slice(0, 3).map((document) => ({
+        document,
+        content: document.extracted_text,
+        score: 0,
+      }))
+    : matches;
+
+  if (sources.length === 0) {
     return {
       data: {
         answer:
           (documents ?? []).length === 0
             ? "知识库还没有可检索的资料。请先上传 PDF、TXT 或 Markdown 文件，再基于资料提问。"
-            : "没有在已上传资料中找到与该问题相关的内容。请尝试资料中的关键词，或先上传相关资料。",
+            : textDocuments.length === 0
+              ? "目前没有可检索的文字资料。PNG 图片可以上传和预览，但暂不支持识别图片中的文字；请上传 PDF、TXT 或 Markdown 文件后再提问。"
+              : "没有在已上传资料中找到与该问题相关的内容。请尝试资料中的关键词，或先上传相关资料。",
         citations: [],
       },
     };
   }
 
-  const citations = matches.map(({ document, content }) => ({
+  const citations = sources.map(({ document, content }) => ({
     id: document.id,
     title: document.title,
     excerpt: findExcerpt(content, terms),
+  }));
+  const modelSources = sources.map(({ document, content }, index) => ({
+    number: index + 1,
+    title: document.title,
+    excerpt: findExcerpt(content, terms, 4000),
   }));
   const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
   const model = process.env.AI_MODEL;
@@ -403,11 +425,7 @@ export async function askKnowledgeQuestion(
             role: "user",
             content: JSON.stringify({
               question,
-              sources: citations.map((citation, index) => ({
-                number: index + 1,
-                title: citation.title,
-                excerpt: citation.excerpt,
-              })),
+              sources: modelSources,
             }),
           },
         ],
