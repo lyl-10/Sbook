@@ -32,6 +32,8 @@
 
 [`supabase/migrations/20261109000000_initial_schema.sql`](./supabase/migrations/20261109000000_initial_schema.sql)
 
+如果数据库已经初始化过，还需要执行 [`supabase/migrations/20261114000000_allow_png_knowledge_files.sql`](./supabase/migrations/20261114000000_allow_png_knowledge_files.sql)，为私有存储桶启用 PNG 上传。
+
 在 Supabase Authentication 设置中启用 Email 登录，并根据需要配置邮箱验证和站点 URL。
 
 ### 2. 配置 Vercel 环境变量
