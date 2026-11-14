@@ -11,6 +11,7 @@ const ALLOWED_TYPES = new Map([
   [".txt", "text/plain"],
   [".md", "text/markdown"],
   [".markdown", "text/markdown"],
+  [".png", "image/png"],
 ]);
 
 function failure(message: string, status: number) {
@@ -53,7 +54,7 @@ export async function POST(request: NextRequest) {
       file.type !== "application/octet-stream" &&
       file.type !== expectedType)
   ) {
-    return failure("仅支持 PDF、TXT 和 Markdown 文件。", 415);
+    return failure("仅支持 PDF、TXT、Markdown 和 PNG 文件。", 415);
   }
 
   const bytes = new Uint8Array(await file.arrayBuffer());
@@ -71,6 +72,11 @@ export async function POST(request: NextRequest) {
       extractedText = result.text;
     } catch {
       return failure("无法解析该 PDF，请确认文件未损坏后重试。", 400);
+    }
+  } else if (expectedType === "image/png") {
+    const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+    if (!pngSignature.every((byte, index) => bytes[index] === byte)) {
+      return failure("文件内容不是有效的 PNG 图片。", 400);
     }
   } else {
     try {

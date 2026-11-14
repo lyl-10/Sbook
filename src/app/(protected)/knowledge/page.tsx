@@ -164,7 +164,7 @@ export default function KnowledgePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">个人知识库</h1>
           <p className="mt-1 text-sm text-slate-500">
-            PDF、TXT 和 Markdown；单文件最多 10 MB。
+            PDF、TXT、Markdown 和 PNG；单文件最多 10 MB。PNG 暂不识别图片中的文字。
           </p>
         </div>
         <button
@@ -178,7 +178,7 @@ export default function KnowledgePage() {
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.txt,.md,.markdown,application/pdf,text/plain,text/markdown"
+          accept=".pdf,.txt,.md,.markdown,.png,application/pdf,text/plain,text/markdown,image/png"
           multiple
           onChange={uploadFiles}
           className="hidden"
@@ -236,7 +236,7 @@ export default function KnowledgePage() {
         <div className="rounded-3xl border border-dashed border-blue-200 bg-white p-12 text-center text-slate-500">
           <div className="mb-4 text-5xl">📭</div>
           {documents.length === 0
-            ? "还没有资料。上传 PDF、TXT 或 Markdown 文件开始建立知识库。"
+            ? "还没有资料。上传 PDF、TXT、Markdown 或 PNG 文件开始建立知识库。"
             : "没有找到匹配的资料。"}
         </div>
       ) : (
@@ -252,7 +252,11 @@ export default function KnowledgePage() {
                 className="block w-full text-left"
               >
                 <div className="mb-3 flex h-24 items-center justify-center rounded-xl bg-slate-50 text-4xl">
-                  {document.mime_type === "application/pdf" ? "📄" : "📝"}
+                  {document.mime_type === "application/pdf"
+                    ? "📄"
+                    : document.mime_type === "image/png"
+                      ? "🖼️"
+                      : "📝"}
                 </div>
                 <h2 className="truncate font-semibold text-slate-800" title={document.title}>
                   {document.title}
@@ -331,11 +335,22 @@ export default function KnowledgePage() {
                 ×
               </button>
             </div>
-            <iframe
-              title={preview.title}
-              src={`/api/documents/${preview.id}/download`}
-              className="min-h-0 flex-1 bg-slate-50"
-            />
+            {preview.mime_type === "image/png" ? (
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-50 p-4">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`/api/documents/${preview.id}/download`}
+                  alt={preview.title}
+                  className="max-h-full max-w-full object-contain"
+                />
+              </div>
+            ) : (
+              <iframe
+                title={preview.title}
+                src={`/api/documents/${preview.id}/download`}
+                className="min-h-0 flex-1 bg-slate-50"
+              />
+            )}
           </div>
         </div>
       )}
