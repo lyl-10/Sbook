@@ -10,10 +10,10 @@
 
 - 邮箱和密码注册、登录及退出；使用 Supabase Auth 管理会话。
 - 上传、预览、下载和删除 PDF、UTF-8 TXT、Markdown 和 PNG 图片，并按分类和标签整理。
-- 提取 PDF、TXT 和 Markdown 的文本并进行关键词检索。PNG 图片可上传和预览，暂不支持图片 OCR/识别。
+- 提取 PDF、TXT 和 Markdown 的文本并进行关键词检索。知识库中的 PNG 可上传和预览，但不会自动识别文字；聊天中可附加 PNG 让支持视觉输入的 AI 模型识图。
 - 新增、编辑和删除错题，记录答案、解析和知识点。
 - 从错题中选择练习，保存作答记录并查看最近记录。
-- 对个人资料进行检索问答，展示可核对的原文引用；可选接入 DeepSeek API（兼容 OpenAI Chat Completions）。
+- 对个人资料进行检索问答，展示可核对的原文引用，并支持在聊天中附加 PNG 图片。
 - 数据库启用行级安全策略，资料文件存储在 Supabase 私有存储桶中。
 
 ## 技术栈
@@ -95,9 +95,9 @@ AI_API_KEY=your-deepseek-api-key
 AI_MODEL=deepseek-chat
 ```
 
-只有检索到相关资料后才会请求模型。未配置模型、没有相关资料或模型请求失败时，界面会明确反馈，并保留可查看的资料引用。
+纯文字问题只有检索到相关资料后才会请求模型；附加 PNG 时可直接请模型识图。使用图片时，`AI_MODEL` 必须支持 OpenAI Chat Completions 格式的 `image_url` 视觉输入；具体能力取决于所配置的模型服务。未配置模型或模型请求失败时，界面会明确反馈，并保留可查看的资料引用。
 
-聊天界面通过登录态保护的 `POST /api/chat` 请求问答，请求体为 `{"message":"你的问题"}`；成功响应包含 `answer` 和 `citations`，失败响应包含 `error`。
+聊天界面通过登录态保护的 `POST /api/chat` 请求问答，请求体为 `{"message":"你的问题"}`；可选附加 `image` 字段，值为 PNG 的 Base64 data URL，单张最大 3 MB。成功响应包含 `answer` 和 `citations`，失败响应包含 `error`。
 
 ## 本地验证
 

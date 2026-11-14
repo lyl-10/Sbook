@@ -164,7 +164,7 @@ export default function KnowledgePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">个人知识库</h1>
           <p className="mt-1 text-sm text-slate-500">
-            PDF、TXT、Markdown 和 PNG；单文件最多 10 MB。PNG 暂不识别图片中的文字。
+            PDF、TXT、Markdown 和 PNG；单文件最多 10 MB。知识库中的 PNG 暂不自动识别文字，可在聊天中附加 PNG 让 AI 识图。
           </p>
         </div>
         <button

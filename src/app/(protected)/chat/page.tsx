@@ -10,7 +10,25 @@ type Message = {
   role: "user" | "assistant";
   content: string;
   citations?: Citation[];
+  image?: string;
 };
+
+const maxChatImageBytes = 3 * 1024 * 1024;
+
+function readImageAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("读取 PNG 图片失败。"));
+      }
+    };
+    reader.onerror = () => reject(new Error("读取 PNG 图片失败。"));
+    reader.readAsDataURL(file);
+  });
+}
 
 function isCitation(value: unknown): value is Citation {
   return (
@@ -36,34 +54,57 @@ export default function ChatPage() {
   const [question, setQuestion] = useState("");
   const [error, setError] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{
+    file: File;
+    preview: string;
+  } | null>(null);
   const chatBoxRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     chatBoxRef.current?.scrollTo({ top: chatBoxRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, isSending]);
 
+  useEffect(
+    () => () => {
+      if (selectedImage) URL.revokeObjectURL(selectedImage.preview);
+    },
+    [selectedImage],
+  );
+
   const sendMessage = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const submittedQuestion = question.trim();
-    if (!submittedQuestion || isSending) return;
+    const imageToSend = selectedImage;
+    if ((!submittedQuestion && !imageToSend) || isSending) return;
 
     setError("");
-    setQuestion("");
-    setMessages((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        role: "user",
-        content: submittedQuestion,
-      },
-    ]);
     setIsSending(true);
 
     try {
+      const imageDataUrl = imageToSend
+        ? await readImageAsDataUrl(imageToSend.file)
+        : undefined;
+      const userMessage = submittedQuestion || "请识别并描述这张图片。";
+      setQuestion("");
+      setSelectedImage(null);
+      setMessages((current) => [
+        ...current,
+        {
+          id: crypto.randomUUID(),
+          role: "user",
+          content: userMessage,
+          ...(imageDataUrl ? { image: imageDataUrl } : {}),
+        },
+      ]);
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: submittedQuestion }),
+        body: JSON.stringify({
+          message: submittedQuestion,
+          image: imageDataUrl,
+        }),
       });
       const result = (await response.json()) as {
         answer?: unknown;
@@ -99,8 +140,12 @@ export default function ChatPage() {
           citations,
         },
       ]);
-    } catch {
-      setError("问答请求失败，请检查网络后重试。");
+    } catch (reason) {
+      setError(
+        reason instanceof Error && reason.message === "读取 PNG 图片失败。"
+          ? reason.message
+          : "问答请求失败，请检查网络后重试。",
+      );
     } finally {
       setIsSending(false);
     }
@@ -154,7 +199,7 @@ export default function ChatPage() {
               </div>
               <h2 className="text-xl font-semibold text-slate-900">让你的资料，变成答案</h2>
               <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
-                提问或选择一个示例开始。回答会优先依据你的知识库，并提供原文引用。
+                提问、附加 PNG 图片或选择一个示例开始。回答会优先依据你的知识库，并提供原文引用。
               </p>
               <div className="mt-6 flex max-w-2xl flex-wrap justify-center gap-2">
                 {suggestions.map((suggestion) => (
@@ -187,6 +232,14 @@ export default function ChatPage() {
                     : "rounded-bl-md border border-slate-100 bg-slate-50 text-slate-800"
                 }`}
               >
+                {message.image && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={message.image}
+                    alt="附加的 PNG 图片"
+                    className="mb-2 max-h-64 max-w-full rounded-lg object-contain"
+                  />
+                )}
                 {message.role === "assistant" ? (
                   <div className="break-words [&_a]:text-blue-700 [&_a]:underline [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-200/70 [&_code]:px-1 [&_code]:py-0.5 [&_h1]:mb-2 [&_h1]:mt-5 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-900 [&_pre]:p-3 [&_pre]:text-slate-100 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6">
                     <ReactMarkdown
@@ -256,6 +309,28 @@ export default function ChatPage() {
           onSubmit={sendMessage}
           className="border-t border-slate-100 bg-white p-4 sm:px-7 sm:py-5"
         >
+          {selectedImage && (
+            <div className="mb-3 flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 p-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={selectedImage.preview}
+                alt="待发送的 PNG 图片"
+                className="size-14 rounded-lg object-cover"
+              />
+              <span className="min-w-0 flex-1 truncate text-sm text-slate-600">
+                {selectedImage.file.name}
+              </span>
+              <button
+                type="button"
+                onClick={() => setSelectedImage(null)}
+                disabled={isSending}
+                aria-label="移除图片"
+                className="rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-white hover:text-red-600 disabled:opacity-50"
+              >
+                移除
+              </button>
+            </div>
+          )}
           <div className="flex items-end gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-2 transition focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100">
             <textarea
               value={question}
@@ -267,9 +342,42 @@ export default function ChatPage() {
               className="max-h-36 min-h-12 min-w-0 flex-1 resize-y bg-transparent px-3 py-2 text-sm leading-6 text-slate-900 outline-none placeholder:text-slate-400"
               rows={1}
             />
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/png"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                if (!file) return;
+                if (file.type !== "image/png") {
+                  setError("请选择 PNG 图片。");
+                  return;
+                }
+                if (file.size > maxChatImageBytes) {
+                  setError("PNG 图片不能超过 3 MB。");
+                  return;
+                }
+                setError("");
+                setSelectedImage({
+                  file,
+                  preview: URL.createObjectURL(file),
+                });
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => imageInputRef.current?.click()}
+              disabled={isSending}
+              aria-label="附加 PNG 图片"
+              className="flex h-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:opacity-50"
+            >
+              + PNG
+            </button>
             <button
               type="submit"
-              disabled={!question.trim() || isSending}
+              disabled={(!question.trim() && !selectedImage) || isSending}
               aria-label="发送问题"
               className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-lg text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
@@ -277,7 +385,7 @@ export default function ChatPage() {
             </button>
           </div>
           <div className="mt-2 flex justify-between px-1 text-xs text-slate-400">
-            <span>Enter 发送 · Shift + Enter 换行</span>
+            <span>PNG 最大 3 MB · Enter 发送 · Shift + Enter 换行</span>
             <span>{question.length}/1000</span>
           </div>
         </form>
