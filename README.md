@@ -42,7 +42,7 @@
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | 是 | Supabase 项目的 Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 是 | Supabase 项目的 anon/publishable key |
-| `AI_API_KEY` | 否 | DeepSeek API 密钥；配置 AI 问答时必填 |
+| `AI_API_KEY` | 否 | DeepSeek API 密钥；配置 AI 问答时必填，两个名称任选其一 |
 | `AI_MODEL` | 否 | 模型名称；配置 AI 问答时必填，DeepSeek 可用 `deepseek-chat` |
 | `AI_BASE_URL` | 否 | DeepSeek API 地址；使用 DeepSeek 时设置为 `https://api.deepseek.com` |
 

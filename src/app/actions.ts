@@ -354,14 +354,14 @@ export async function askKnowledgeQuestion(
     title: document.title,
     excerpt: findExcerpt(content, terms),
   }));
-  const apiKey = process.env.AI_API_KEY;
+  const apiKey = process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY;
   const model = process.env.AI_MODEL;
 
   if (!apiKey || !model) {
     return {
       data: {
         answer:
-          "已检索到以下资料片段。当前未配置 AI_API_KEY 和 AI_MODEL，暂不能生成模型回答；你可以先查看引用内容。",
+          "已检索到以下资料片段。当前未配置 AI_API_KEY（或 DEEPSEEK_API_KEY）和 AI_MODEL，暂不能生成模型回答；你可以先查看引用内容。",
         citations,
       },
     };
