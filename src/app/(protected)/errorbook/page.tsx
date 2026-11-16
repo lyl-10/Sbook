@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Trash } from "lucide-react";
 import {
   deleteWrongQuestion,
   explainWrongQuestion,
@@ -46,6 +47,7 @@ export default function ErrorBookPage() {
   const [form, setForm] = useState<QuestionForm>(EMPTY_FORM);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [warning, setWarning] = useState("");
   const [isLoading, setIsLoading] = useState(questions === null);
   const [isSaving, setIsSaving] = useState(false);
   const [studyByQuestionId, setStudyByQuestionId] = useState<
@@ -96,6 +98,7 @@ export default function ErrorBookPage() {
     setEditing(null);
     setForm(EMPTY_FORM);
     setError("");
+    setWarning("");
     setIsCreating(true);
   };
 
@@ -108,6 +111,7 @@ export default function ErrorBookPage() {
       knowledgePoint: question.knowledge_point,
     });
     setError("");
+    setWarning("");
     setIsCreating(true);
   };
 
@@ -115,6 +119,7 @@ export default function ErrorBookPage() {
     event.preventDefault();
     setIsSaving(true);
     setError("");
+    setWarning("");
     try {
       const result = await saveWrongQuestion(editing?.id ?? null, form);
       if ("error" in result) {
@@ -129,7 +134,16 @@ export default function ErrorBookPage() {
         });
       }
       setIsCreating(false);
-      setNotice(editing ? "错题已更新。" : "错题已保存。");
+      setNotice(
+        result.warning
+          ? editing
+            ? "错题已更新。"
+            : "错题已保存。"
+          : editing
+            ? "错题已更新，AI 标签已重新生成。"
+            : "错题已保存，AI 已添加标签。",
+      );
+      setWarning(result.warning ?? "");
       await refresh();
     } catch {
       setError("保存错题失败，请检查网络后重试。");
@@ -245,7 +259,7 @@ export default function ErrorBookPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">错题本</h1>
           <p className="mt-1 text-sm text-slate-500">
-            手动记录题目、正确答案、解析和知识点；自动 OCR 暂不包含在 MVP。
+            录入题目后会尝试由 AI 自动添加标签，也可获取 AI 讲解和知识点相似题。
           </p>
         </div>
         <Button
@@ -265,6 +279,11 @@ export default function ErrorBookPage() {
       {notice && (
         <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
           {notice}
+        </p>
+      )}
+      {warning && (
+        <p role="status" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+          {warning}
         </p>
       )}
 
@@ -291,6 +310,19 @@ export default function ErrorBookPage() {
                     <p className="mt-2 text-sm text-blue-700">
                       知识点：{question.knowledge_point}
                     </p>
+                  )}
+                  {(question.tags ?? []).length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="text-xs text-slate-500">AI 标签：</span>
+                      {(question.tags ?? []).map((tag) => (
+                        <span
+                          key={`${question.id}-${tag}`}
+                          className="rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-700"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
                   )}
                   {question.correct_answer && (
                     <details className="mt-2 text-sm text-slate-600">
@@ -319,9 +351,10 @@ export default function ErrorBookPage() {
                     variant="ghost"
                     type="button"
                     onClick={() => void removeQuestion(question)}
-                    className="h-auto p-0 text-red-600 hover:bg-transparent hover:text-red-800 hover:underline"
+                    className="h-auto gap-1 p-0 text-red-600 hover:bg-transparent hover:text-red-800 hover:underline"
                   >
-                    删除
+                    <Trash aria-hidden="true" className="h-4 w-4" />
+                    <span>删除</span>
                   </Button>
                 </div>
                 <div className="w-full">

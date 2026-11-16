@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import ReviewDashboard from "@/components/ReviewDashboard";
+import { BookBookmark, BookOpenText, PencilLine } from "lucide-react";
+import ReviewDashboard, { ForgettingCurve } from "@/components/ReviewDashboard";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -62,19 +63,19 @@ export default async function HomePage() {
             label: "知识资料",
             count: documents.count ?? 0,
             href: "/knowledge",
-            icon: "📚",
+            icon: BookOpenText,
           },
           {
             label: "错题",
             count: questions.count ?? 0,
             href: "/errorbook",
-            icon: "📝",
+            icon: BookBookmark,
           },
           {
             label: "练习记录",
             count: attempts.count ?? 0,
             href: "/practice",
-            icon: "✏️",
+            icon: PencilLine,
           },
         ].map((item) => (
           <Link
@@ -82,7 +83,7 @@ export default async function HomePage() {
             href={item.href}
             className="rounded-2xl border border-blue-50 bg-white p-5 shadow-sm transition hover:shadow-md"
           >
-            <span className="text-2xl">{item.icon}</span>
+            <item.icon aria-hidden="true" className="h-6 w-6 text-blue-700" />
             <p className="mt-3 text-sm text-slate-500">{item.label}</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{item.count}</p>
           </Link>
@@ -142,6 +143,8 @@ export default async function HomePage() {
           )}
         </div>
       </div>
+
+      <ForgettingCurve />
     </section>
   );
 }

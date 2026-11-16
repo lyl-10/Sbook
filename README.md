@@ -11,12 +11,13 @@
 ## 功能
 
 - 邮箱和密码注册、登录及退出；使用 Supabase Auth 管理会话。
-- 上传、预览、下载和删除 PDF、UTF-8 TXT、Markdown 和 PNG 图片，并按分类和标签整理。
-- 提取 PDF、TXT 和 Markdown 的文本并进行关键词检索。知识库中的 PNG 可上传和预览，但不会自动识别文字；聊天中可附加 PNG 让支持视觉输入的 AI 模型识图。
-- 新增、编辑和删除错题，记录答案、解析和知识点。
+- 上传、预览、下载和删除 PDF、UTF-8 TXT、Markdown 和 PNG 图片，并按分类和标签整理；上传后 AI 会尝试自动添加资料标签。
+- 提取 PDF、TXT 和 Markdown 的文本并进行关键词检索。知识库中的 PNG 不做 OCR；小于等于 3 MB 时可由支持视觉输入的 AI 模型辅助生成标签，聊天中也可附加 PNG 让 AI 识图。
+- 新增、编辑和删除错题；保存题目后由 AI 自动添加知识点标签，并记录答案和解析。
 - 按错题知识点生成相似题，并可请求 AI 分步骤讲解错题。
 - 从错题中选择练习，保存作答记录并查看最近记录。
 - 首页展示遗忘曲线示意图，并按 1、3、7、14、30 天间隔提醒复习错题。
+- 可在侧边栏切换日间/夜间模式，并记住浏览器中的选择。
 - 对个人资料进行检索问答，展示可核对的原文引用，并支持在聊天中附加 PNG 图片。
 - 数据库启用行级安全策略，资料文件存储在 Supabase 私有存储桶中。
 
@@ -39,6 +40,8 @@
 如果数据库已经初始化过，还需要执行 [`supabase/migrations/20261114000000_allow_png_knowledge_files.sql`](./supabase/migrations/20261114000000_allow_png_knowledge_files.sql)，为私有存储桶启用 PNG 上传。
 
 要启用首页的错题复习提醒，还需要执行 [`supabase/migrations/20261116000000_wrong_question_review_schedule.sql`](./supabase/migrations/20261116000000_wrong_question_review_schedule.sql)。
+
+要启用错题 AI 标签，还需要执行 [`supabase/migrations/20261116172300_wrong_question_tags.sql`](./supabase/migrations/20261116172300_wrong_question_tags.sql)。
 
 在 Supabase Authentication 设置中启用 Email 登录，并根据需要配置邮箱验证和站点 URL。
 
@@ -105,7 +108,7 @@ AI_MODEL=deepseek-chat
 
 聊天界面通过登录态保护的 `POST /api/chat` 请求问答，请求体为 `{"message":"你的问题"}`；可选附加 `image` 字段，值为 PNG 的 Base64 data URL，单张最大 3 MB。成功响应包含 `answer` 和 `citations`，失败响应包含 `error`。
 
-错题本中的「AI 讲解」和「推送相似题」也使用上述服务端 AI 配置。相似题根据错题知识点生成 3 道题并附答案与解析；未填写知识点时需先补充。错题题目、答案、解析和知识点会发送给配置的 AI 服务商；请勿提交不适合发送给该服务商的内容。
+资料上传后会使用上述服务端 AI 配置，根据文件正文或符合大小限制的 PNG 图片生成标签；AI 未配置或生成失败时资料仍会保存，界面会提示原因。错题保存时也会自动生成知识点标签；错题本中的「AI 讲解」和「推送相似题」同样使用该配置。资料正文/图片及错题内容会发送给配置的 AI 服务商；请勿提交不适合发送给该服务商的内容。
 
 ## 本地验证
 

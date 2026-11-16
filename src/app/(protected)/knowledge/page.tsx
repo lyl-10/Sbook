@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Trash } from "lucide-react";
 import { listKnowledgeDocuments, updateKnowledgeMetadata } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { useProtectedData } from "@/components/ProtectedDataProvider";
@@ -18,6 +19,7 @@ export default function KnowledgePage() {
   const [editTags, setEditTags] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [warning, setWarning] = useState("");
   const [isLoading, setIsLoading] = useState(documents === null);
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,8 +68,10 @@ export default function KnowledgePage() {
 
     setError("");
     setNotice("");
+    setWarning("");
     setIsUploading(true);
     let uploadError = "";
+    const uploadWarnings: string[] = [];
     try {
       for (const file of files) {
         const formData = new FormData();
@@ -90,10 +94,27 @@ export default function KnowledgePage() {
           uploadError = `${file.name}：${message}`;
           break;
         }
+        if (
+          typeof result === "object" &&
+          result !== null &&
+          "warning" in result &&
+          typeof result.warning === "string"
+        ) {
+          uploadWarnings.push(`${file.name}：${result.warning}`);
+        }
       }
       await refresh();
       if (uploadError) setError(uploadError);
-      else setNotice("资料已安全保存到你的知识库。");
+      else setNotice("资料已安全保存，AI 标签已自动添加。");
+      if (uploadWarnings.length > 0) {
+        const displayedWarnings = uploadWarnings.slice(0, 3).join("；");
+        const remainingCount = uploadWarnings.length - 3;
+        setWarning(
+          remainingCount > 0
+            ? `${displayedWarnings}；另有 ${remainingCount} 个文件未能自动添加标签。`
+            : displayedWarnings,
+        );
+      }
     } catch {
       setError("上传请求失败，请检查网络后重试。");
     } finally {
@@ -170,7 +191,7 @@ export default function KnowledgePage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">个人知识库</h1>
           <p className="mt-1 text-sm text-slate-500">
-            PDF、TXT、Markdown 和 PNG；单文件最多 10 MB。知识库中的 PNG 暂不自动识别文字，可在聊天中附加 PNG 让 AI 识图。
+            上传后会尝试由 AI 自动添加标签。正文或不超过 3 MB 的 PNG 图片会发送给已配置的 AI 服务；PNG 不执行 OCR。单文件最多 10 MB。
           </p>
         </div>
         <Button
@@ -231,6 +252,11 @@ export default function KnowledgePage() {
       {notice && (
         <p role="status" className="mb-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
           {notice}
+        </p>
+      )}
+      {warning && (
+        <p role="status" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
+          {warning}
         </p>
       )}
 
@@ -310,9 +336,10 @@ export default function KnowledgePage() {
                   variant="ghost"
                   type="button"
                   onClick={() => void deleteDocument(document)}
-                  className="h-auto p-0 text-red-600 hover:bg-transparent hover:text-red-800 hover:underline"
+                  className="h-auto gap-1 p-0 text-red-600 hover:bg-transparent hover:text-red-800 hover:underline"
                 >
-                  删除
+                  <Trash aria-hidden="true" className="h-4 w-4" />
+                  <span>删除</span>
                 </Button>
               </div>
             </article>

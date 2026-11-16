@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { CornerRightUp, ImagePlus, MessageCircleMore, Trash } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button } from "@/components/ui/button";
@@ -191,8 +192,8 @@ export default function ChatPage() {
         >
           {messages.length === 0 && (
             <div className="flex min-h-full flex-col items-center justify-center py-8 text-center">
-              <div className="mb-5 flex size-16 items-center justify-center rounded-3xl bg-blue-50 text-3xl">
-                📖
+              <div className="mb-5 flex size-16 items-center justify-center rounded-3xl bg-blue-50 text-blue-700">
+                <MessageCircleMore aria-hidden="true" className="h-8 w-8" />
               </div>
               <h2 className="text-xl font-semibold text-slate-900">让你的资料，变成答案</h2>
               <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
@@ -324,9 +325,10 @@ export default function ChatPage() {
                 onClick={() => setSelectedImage(null)}
                 disabled={isSending}
                 aria-label="移除图片"
-                className="h-auto rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-white hover:text-red-600 disabled:opacity-50"
+                className="h-auto gap-1 rounded-lg px-2 py-1 text-sm text-slate-500 hover:bg-white hover:text-red-600 disabled:opacity-50"
               >
-                移除
+                <Trash aria-hidden="true" className="h-4 w-4" />
+                <span>移除</span>
               </Button>
             </div>
           )}
@@ -371,18 +373,20 @@ export default function ChatPage() {
               onClick={() => imageInputRef.current?.click()}
               disabled={isSending}
               aria-label="附加 PNG 图片"
-              className="h-10 shrink-0 rounded-xl border-slate-200 bg-white px-3 text-sm text-slate-600 hover:border-blue-300 hover:bg-white hover:text-blue-700 disabled:opacity-50"
+              className="h-10 shrink-0 gap-2 rounded-xl border-slate-200 bg-white px-3 text-sm text-slate-600 hover:border-blue-300 hover:bg-white hover:text-blue-700 disabled:opacity-50"
             >
-              + PNG
+              <ImagePlus aria-hidden="true" className="h-4 w-4" />
             </Button>
-            <Button
-              type="submit"
-              disabled={(!question.trim() && !selectedImage) || isSending}
-              aria-label="发送问题"
-              className="size-10 shrink-0 rounded-xl bg-blue-700 p-0 text-lg text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-100"
-            >
-              ↑
-            </Button>
+            {(question.trim() || selectedImage) && (
+              <Button
+                type="submit"
+                disabled={isSending}
+                aria-label="发送问题"
+                className="size-10 shrink-0 rounded-xl bg-blue-700 p-0 text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:opacity-100"
+              >
+                <CornerRightUp aria-hidden="true" className="h-5 w-5" />
+              </Button>
+            )}
           </div>
           <div className="mt-2 flex justify-between px-1 text-xs text-slate-400">
             <span>PNG 最大 3 MB · Enter 发送 · Shift + Enter 换行</span>

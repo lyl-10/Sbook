@@ -13,7 +13,7 @@ type DueQuestion = {
   next_review_at: string;
 };
 
-function ForgettingCurve() {
+export function ForgettingCurve() {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4">
@@ -30,8 +30,8 @@ function ForgettingCurve() {
       >
         <defs>
           <linearGradient id="retention-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#2563eb" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.01" />
+            <stop offset="0%" stopColor="var(--chart-highlight)" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="var(--chart-highlight)" stopOpacity="0.01" />
           </linearGradient>
         </defs>
         {[30, 70, 110, 150].map((y) => (
@@ -66,7 +66,7 @@ function ForgettingCurve() {
         <path
           d="M42 30 C48 54 53 82 55 94 L55 30 C65 44 77 63 81 76 L81 30 C101 45 119 61 133 78 L133 30 C161 45 191 63 224 80 L224 30 C276 48 341 69 432 91"
           fill="none"
-          stroke="#2563eb"
+          stroke="var(--chart-highlight)"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="3"
@@ -80,7 +80,7 @@ function ForgettingCurve() {
               cy="30"
               r="4"
               fill="#fff"
-              stroke="#2563eb"
+              stroke="var(--chart-highlight)"
               strokeWidth="2"
             />
           );
@@ -158,83 +158,80 @@ export default function ReviewDashboard({
   };
 
   return (
-    <div className="mb-8 grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
-      <ForgettingCurve />
-      <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">今日复习</p>
-            <p className="mt-1 text-xs text-slate-500">
-              {loadError
-                ? "复习提醒暂不可用"
-                : totalDue > 0
-                  ? `有 ${totalDue} 道错题到期`
-                  : "暂时没有到期错题"}
-            </p>
-          </div>
-          <Link
-            href="/errorbook"
-            className="shrink-0 text-sm font-medium text-blue-700 hover:underline"
-          >
-            错题本
-          </Link>
+    <div className="mb-8 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">今日复习</p>
+          <p className="mt-1 text-xs text-slate-500">
+            {loadError
+              ? "复习提醒暂不可用"
+              : totalDue > 0
+                ? `有 ${totalDue} 道错题到期`
+                : "暂时没有到期错题"}
+          </p>
         </div>
-
-        {loadError && (
-          <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            无法加载复习提醒：{loadError}
-          </p>
-        )}
-        {error && (
-          <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
-            {error}
-          </p>
-        )}
-        {notice && (
-          <p role="status" className="mb-3 rounded-lg bg-green-50 p-3 text-sm text-green-700">
-            {notice}
-          </p>
-        )}
-
-        {!loadError && dueQuestions.length > 0 ? (
-          <ul className="divide-y divide-slate-100">
-            {dueQuestions.map((question) => (
-              <li key={question.id} className="py-3 first:pt-0 last:pb-0">
-                <p className="line-clamp-2 text-sm font-medium text-slate-800">
-                  {question.question}
-                </p>
-                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-xs text-slate-500">
-                    {question.knowledge_point || `已复习 ${question.review_count} 次`}
-                  </span>
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={busyId !== null}
-                    onClick={() => void completeReview(question.id)}
-                    className="h-auto rounded-lg bg-blue-700 px-3 py-1.5 text-xs text-white hover:bg-blue-800"
-                  >
-                    {busyId === question.id ? "更新中…" : "完成复习"}
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : !loadError ? (
-          <div className="rounded-xl bg-slate-50 px-4 py-6 text-center">
-            <p className="text-sm text-slate-600">
-              {totalDue > 0
-                ? `当前列表已完成，还有 ${totalDue} 道到期错题。`
-                : "按计划复习错题，系统会自动安排下一次提醒。"}
-            </p>
-            {totalDue === 0 && (
-              <p className="mt-1 text-xs text-slate-500">
-                新增错题后，将在 1 天后首次提醒。
-              </p>
-            )}
-          </div>
-        ) : null}
+        <Link
+          href="/errorbook"
+          className="shrink-0 text-sm font-medium text-blue-700 hover:underline"
+        >
+          错题本
+        </Link>
       </div>
+
+      {loadError && (
+        <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          无法加载复习提醒：{loadError}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </p>
+      )}
+      {notice && (
+        <p role="status" className="mb-3 rounded-lg bg-green-50 p-3 text-sm text-green-700">
+          {notice}
+        </p>
+      )}
+
+      {!loadError && dueQuestions.length > 0 ? (
+        <ul className="divide-y divide-slate-100">
+          {dueQuestions.map((question) => (
+            <li key={question.id} className="py-3 first:pt-0 last:pb-0">
+              <p className="line-clamp-2 text-sm font-medium text-slate-800">
+                {question.question}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs text-slate-500">
+                  {question.knowledge_point || `已复习 ${question.review_count} 次`}
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={busyId !== null}
+                  onClick={() => void completeReview(question.id)}
+                  className="h-auto rounded-lg bg-blue-700 px-3 py-1.5 text-xs text-white hover:bg-blue-800"
+                >
+                  {busyId === question.id ? "更新中…" : "完成复习"}
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      ) : !loadError ? (
+        <div className="rounded-xl bg-slate-50 px-4 py-6 text-center">
+          <p className="text-sm text-slate-600">
+            {totalDue > 0
+              ? `当前列表已完成，还有 ${totalDue} 道到期错题。`
+              : "按计划复习错题，系统会自动安排下一次提醒。"}
+          </p>
+          {totalDue === 0 && (
+            <p className="mt-1 text-xs text-slate-500">
+              新增错题后，将在 1 天后首次提醒。
+            </p>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }

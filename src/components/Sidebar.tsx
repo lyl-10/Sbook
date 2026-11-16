@@ -3,20 +3,33 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+  BookBookmark,
+  BookOpenText,
+  ChevronLeft,
+  ChevronRight,
+  House,
+  LogOut,
+  MessageCircleMore,
+  PencilLine,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import ThemeToggle from "@/components/ThemeToggle";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
-const navItems = [
-  { label: "首页", href: "/", icon: "🏠" },
-  { label: "对话", href: "/chat", icon: "💬" },
-  { label: "个人知识库", href: "/knowledge", icon: "📚" },
-  { label: "练习", href: "/practice", icon: "✏️" },
-  { label: "错题本", href: "/errorbook", icon: "📕" },
+const navItems: { label: string; href: string; icon: LucideIcon }[] = [
+  { label: "首页", href: "/", icon: House },
+  { label: "对话", href: "/chat", icon: MessageCircleMore },
+  { label: "个人知识库", href: "/knowledge", icon: BookOpenText },
+  { label: "练习", href: "/practice", icon: PencilLine },
+  { label: "错题本", href: "/errorbook", icon: BookBookmark },
 ];
 
 export default function Sidebar({ email }: { email: string }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [error, setError] = useState("");
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -40,45 +53,94 @@ export default function Sidebar({ email }: { email: string }) {
   };
 
   return (
-    <aside className="flex w-20 shrink-0 flex-col border-r border-blue-100 bg-white p-2 shadow-sm sm:w-56 sm:p-4 lg:w-64 lg:p-6">
-      <h2 className="mb-6 px-2 text-center text-lg font-bold text-blue-900 sm:mb-8 sm:text-left sm:text-xl">
-        <span className="sm:hidden">📖</span>
-        <span className="hidden sm:inline">📖 个人知识库</span>
-      </h2>
+    <aside
+      className={`sticky top-0 flex h-screen w-20 shrink-0 self-start flex-col border-r border-blue-100 bg-white p-2 shadow-sm ${
+        isCollapsed ? "sm:w-20 sm:p-3" : "sm:w-56 sm:p-4 lg:w-64 lg:p-6"
+      }`}
+    >
+      <div
+        className={`mb-6 flex items-center ${
+          isCollapsed ? "justify-center" : "justify-between"
+        } sm:mb-8`}
+      >
+        <h2
+          className={`text-center text-lg font-bold text-blue-900 sm:text-left sm:text-xl ${
+            isCollapsed ? "" : "px-1 sm:truncate"
+          }`}
+        >
+            <BookOpenText
+              aria-hidden="true"
+              className={isCollapsed ? "h-5 w-5" : "h-5 w-5 sm:hidden"}
+            />
+          <span className={isCollapsed ? "hidden" : "hidden sm:inline"}>
+              个人知识库
+          </span>
+        </h2>
+        <Button
+          variant="ghost"
+          type="button"
+          aria-label={isCollapsed ? "展开侧边栏" : "折叠侧边栏"}
+          aria-expanded={!isCollapsed}
+          aria-controls="primary-navigation"
+          title={isCollapsed ? "展开侧边栏" : "折叠侧边栏"}
+          onClick={() => setIsCollapsed((current) => !current)}
+          className="hidden h-8 w-8 shrink-0 p-0 text-slate-600 hover:bg-blue-50 hover:text-blue-900 sm:inline-flex"
+        >
+          {isCollapsed ? (
+            <ChevronRight aria-hidden="true" className="h-5 w-5" />
+          ) : (
+            <ChevronLeft aria-hidden="true" className="h-5 w-5" />
+          )}
+        </Button>
+      </div>
 
-      <nav className="flex-1 space-y-1">
+      <nav id="primary-navigation" className="flex-1 space-y-1">
         {navItems.map((item) => {
           const active =
             pathname === item.href ||
             (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+          const Icon = item.icon;
           return (
             <Link
               key={item.href}
               href={item.href}
               aria-label={item.label}
               title={item.label}
-              className={`flex items-center justify-center gap-3 rounded-xl px-2 py-3 text-sm font-medium transition sm:justify-start sm:px-3 lg:px-4 ${
+              className={`flex items-center gap-3 rounded-xl py-3 text-sm font-medium transition ${
+                isCollapsed
+                  ? "justify-center px-2"
+                  : "justify-center px-2 sm:justify-start sm:px-3 lg:px-4"
+              } ${
                 active
                   ? "bg-blue-100 text-blue-900"
                   : "text-slate-600 hover:bg-blue-50 hover:text-blue-900"
               }`}
             >
-              <span className="w-7 text-center text-xl">{item.icon}</span>
-              <span className="hidden sm:inline">{item.label}</span>
+              <Icon aria-hidden="true" className="h-5 w-5 shrink-0" />
+              <span className={isCollapsed ? "hidden" : "hidden sm:inline"}>
+                {item.label}
+              </span>
             </Link>
           );
         })}
       </nav>
 
+      <ThemeToggle collapsed={isCollapsed} />
+
       <Button
         variant="ghost"
         onClick={handleLogout}
         disabled={isSigningOut}
-        title={email}
-        className="mt-4 h-auto flex items-center justify-center gap-3 rounded-xl px-2 py-3 text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 sm:justify-start sm:px-3 lg:px-4"
+        aria-label="退出登录"
+        title={isCollapsed ? "退出登录" : email}
+        className={`mt-4 h-auto flex items-center gap-3 rounded-xl py-3 text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 ${
+          isCollapsed
+            ? "justify-center px-2"
+            : "justify-center px-2 sm:justify-start sm:px-3 lg:px-4"
+        }`}
       >
-        <span className="w-7 text-center text-xl">🚪</span>
-        <span className="hidden sm:inline">
+        <LogOut aria-hidden="true" className="h-5 w-5 shrink-0" />
+        <span className={isCollapsed ? "hidden" : "hidden sm:inline"}>
           {isSigningOut ? "退出中…" : "退出登录"}
         </span>
       </Button>
