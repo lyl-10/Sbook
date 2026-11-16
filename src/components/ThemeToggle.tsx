@@ -74,9 +74,9 @@ export default function ThemeToggle({ collapsed = false }: { collapsed?: boolean
       >
         <span aria-hidden="true" className="flex shrink-0 items-center">
           {isDark ? (
-            <Moon className="h-4 w-4" />
+            <Moon className="h-5 w-5" />
           ) : (
-            <Sun className="h-4 w-4" />
+            <Sun className="h-5 w-5" />
           )}
         </span>
         <span className={collapsed ? "hidden" : "hidden sm:inline"}>
