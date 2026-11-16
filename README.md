@@ -16,10 +16,11 @@
 - 新增、编辑和删除错题；保存题目后由 AI 自动添加知识点标签，并记录答案和解析。
 - 按错题知识点生成相似题，并可请求 AI 分步骤讲解错题。
 - 从错题中选择练习，保存作答记录并查看最近记录。
-- 首页展示遗忘曲线示意图，并按 1、3、7、14、30 天间隔提醒复习错题。
-- 可在侧边栏切换日间/夜间模式，并记住浏览器中的选择。
+- 首页根据错题复习次数、最近复习时间和下次计划估算艾宾浩斯遗忘曲线，并按 1、3、7、14、30 天间隔提醒复习错题。
+- 设置中心支持头像和昵称、跟随系统/明亮/暗色模式选择、退出登录及网站更新日志。
 - 对个人资料进行检索问答，展示可核对的原文引用，并支持在聊天中附加 PNG 图片。
 - 数据库启用行级安全策略，资料文件存储在 Supabase 私有存储桶中。
+- 头像存储在受用户级策略保护的 Supabase 私有存储桶中。
 
 ## 技术栈
 
@@ -42,6 +43,8 @@
 要启用首页的错题复习提醒，还需要执行 [`supabase/migrations/20261116000000_wrong_question_review_schedule.sql`](./supabase/migrations/20261116000000_wrong_question_review_schedule.sql)。
 
 要启用错题 AI 标签，还需要执行 [`supabase/migrations/20261116172300_wrong_question_tags.sql`](./supabase/migrations/20261116172300_wrong_question_tags.sql)。
+
+要启用个人头像上传，还需要执行 [`supabase/migrations/20261117000000_user_avatars.sql`](./supabase/migrations/20261117000000_user_avatars.sql)。
 
 在 Supabase Authentication 设置中启用 Email 登录，并根据需要配置邮箱验证和站点 URL。
 

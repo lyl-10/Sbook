@@ -22,7 +22,7 @@ export default async function ProtectedLayout({
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar email={user.email ?? ""} />
+      <Sidebar />
       <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">
         <ProtectedDataProvider>
           <ChatMessagesProvider>{children}</ChatMessagesProvider>

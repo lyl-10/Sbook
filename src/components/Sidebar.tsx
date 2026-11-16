@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   BookBookmark,
@@ -9,14 +9,12 @@ import {
   BookOpenText,
   ChevronLeft,
   House,
-  LogOut,
   MessageCircleMore,
   PencilLine,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import ThemeToggle from "@/components/ThemeToggle";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const navItems: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "首页", href: "/", icon: House },
@@ -26,31 +24,9 @@ const navItems: { label: string; href: string; icon: LucideIcon }[] = [
   { label: "错题本", href: "/errorbook", icon: BookBookmark },
 ];
 
-export default function Sidebar({ email }: { email: string }) {
+export default function Sidebar() {
   const pathname = usePathname();
-  const router = useRouter();
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [error, setError] = useState("");
-  const [isSigningOut, setIsSigningOut] = useState(false);
-
-  const handleLogout = async () => {
-    setError("");
-    setIsSigningOut(true);
-    try {
-      const { error: signOutError } =
-        await createSupabaseBrowserClient().auth.signOut();
-      if (signOutError) {
-        setError(`退出登录失败：${signOutError.message}`);
-        setIsSigningOut(false);
-        return;
-      }
-      router.replace("/login");
-      router.refresh();
-    } catch {
-      setError("退出登录请求失败，请检查网络后重试。");
-      setIsSigningOut(false);
-    }
-  };
 
   return (
     <aside
@@ -127,24 +103,26 @@ export default function Sidebar({ email }: { email: string }) {
 
       <ThemeToggle collapsed={isCollapsed} />
 
-      <Button
-        variant="ghost"
-        onClick={handleLogout}
-        disabled={isSigningOut}
-        aria-label="退出登录"
-        title={isCollapsed ? "退出登录" : email}
-        className={`mt-4 h-auto flex items-center gap-3 rounded-xl py-3 text-sm font-medium text-red-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 ${
+      <Link
+        href="/settings"
+        aria-label="设置"
+        aria-current={pathname === "/settings" ? "page" : undefined}
+        title="设置"
+        className={`mt-4 flex items-center gap-3 rounded-xl py-3 text-sm font-medium transition ${
           isCollapsed
             ? "justify-center px-2"
             : "justify-center px-2 sm:justify-start sm:px-3 lg:px-4"
+        } ${
+          pathname === "/settings"
+            ? "bg-blue-100 text-blue-900"
+            : "text-slate-600 hover:bg-blue-50 hover:text-blue-900"
         }`}
       >
-        <LogOut aria-hidden="true" className="h-5 w-5 shrink-0" />
+        <Settings aria-hidden="true" className="h-5 w-5 shrink-0" />
         <span className={isCollapsed ? "hidden" : "hidden sm:inline"}>
-          {isSigningOut ? "退出中…" : "退出登录"}
+          设置
         </span>
-      </Button>
-      {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+      </Link>
     </aside>
   );
 }

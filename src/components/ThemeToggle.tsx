@@ -3,58 +3,27 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-type ThemeSnapshot = {
-  isDark: boolean;
-  error: string;
-};
-
-const themeEventName = "sbook-theme-change";
-const serverSnapshot: ThemeSnapshot = { isDark: false, error: "" };
-let themeSnapshot = serverSnapshot;
-
-function subscribeTheme(listener: () => void) {
-  window.addEventListener(themeEventName, listener);
-  return () => window.removeEventListener(themeEventName, listener);
-}
-
-function getThemeSnapshot() {
-  return themeSnapshot;
-}
-
-function getServerSnapshot() {
-  return serverSnapshot;
-}
-
-function setTheme(isDark: boolean, error = "") {
-  themeSnapshot = { isDark, error };
-  document.documentElement.classList.toggle("dark", isDark);
-  window.dispatchEvent(new Event(themeEventName));
-}
+import {
+  getServerThemeSnapshot,
+  getThemeSnapshot,
+  initializeTheme,
+  setThemeMode,
+  subscribeTheme,
+} from "@/lib/theme-preference";
 
 export default function ThemeToggle({ collapsed = false }: { collapsed?: boolean }) {
   const { isDark, error } = useSyncExternalStore(
     subscribeTheme,
     getThemeSnapshot,
-    getServerSnapshot,
+    getServerThemeSnapshot,
   );
 
   useEffect(() => {
-    try {
-      setTheme(window.localStorage.getItem("sbook-theme") === "dark");
-    } catch {
-      setTheme(false, "无法读取主题偏好，当前使用日间模式。");
-    }
+    initializeTheme();
   }, []);
 
   const toggleTheme = () => {
-    const nextIsDark = !isDark;
-    try {
-      window.localStorage.setItem("sbook-theme", nextIsDark ? "dark" : "light");
-      setTheme(nextIsDark);
-    } catch {
-      setTheme(nextIsDark, "主题已切换，但浏览器无法保存此偏好。");
-    }
+    setThemeMode(isDark ? "light" : "dark");
   };
 
   return (
