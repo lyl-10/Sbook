@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 
 const reviewIntervals = [1, 3, 7, 14, 30];
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
+const roundChartCoordinate = (value: number) => Math.round(value * 1000) / 1000;
 
 type DueQuestion = {
   id: string;
@@ -73,8 +74,8 @@ export function ForgettingCurve({
   const currentRetention = retentionAt(0);
   const curvePoints = Array.from({ length: 31 }, (_, day) => ({
     day,
-    x: 42 + (day / 30) * 390,
-    y: 150 - (retentionAt(day) / 100) * 120,
+    x: roundChartCoordinate(42 + (day / 30) * 390),
+    y: roundChartCoordinate(150 - (retentionAt(day) / 100) * 120),
   }));
   const curvePath = curvePoints
     .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
@@ -144,7 +145,7 @@ export function ForgettingCurve({
               );
             })}
             {[0, 7, 14, 21, 30].map((day) => {
-              const x = 42 + (day / 30) * 390;
+              const x = roundChartCoordinate(42 + (day / 30) * 390);
               return (
                 <g key={day}>
                   <line
@@ -178,7 +179,7 @@ export function ForgettingCurve({
             />
             <circle
               cx="42"
-              cy={150 - (currentRetention / 100) * 120}
+              cy={curvePoints[0].y}
               r="4"
               fill="#fff"
               stroke="var(--chart-highlight)"
