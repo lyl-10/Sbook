@@ -1,9 +1,13 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { completeWrongQuestionReview } from "@/app/actions";
 import { Button } from "@/components/ui/button";
+
+const reviewIntervals = [1, 3, 7, 14, 30];
+const millisecondsPerDay = 24 * 60 * 60 * 1000;
 
 type DueQuestion = {
   id: string;
@@ -13,110 +17,182 @@ type DueQuestion = {
   next_review_at: string;
 };
 
-export function ForgettingCurve() {
+type CurveQuestion = {
+  created_at: string;
+  review_count: number;
+  last_reviewed_at: string | null;
+  next_review_at: string;
+};
+
+function getReviewIntervalDays(question: CurveQuestion) {
+  const reviewAnchor = Date.parse(question.last_reviewed_at ?? question.created_at);
+  const nextReview = Date.parse(question.next_review_at);
+  const scheduledDays = (nextReview - reviewAnchor) / millisecondsPerDay;
+
+  if (Number.isFinite(scheduledDays) && scheduledDays > 0) {
+    return Math.min(Math.max(scheduledDays, 1), 30);
+  }
+
+  return reviewIntervals[
+    Math.min(question.review_count, reviewIntervals.length - 1)
+  ];
+}
+
+export function ForgettingCurve({
+  questions,
+  asOf,
+  loadError,
+}: {
+  questions: CurveQuestion[];
+  asOf: string;
+  loadError: string | null;
+}) {
+  const now = Date.parse(asOf);
+  const profiles = questions.map((question) => {
+    const reviewAnchor = Date.parse(
+      question.last_reviewed_at ?? question.created_at,
+    );
+    return {
+      halfLifeDays: getReviewIntervalDays(question),
+      elapsedDays: Number.isFinite(reviewAnchor) && Number.isFinite(now)
+        ? Math.max(0, (now - reviewAnchor) / millisecondsPerDay)
+        : 0,
+    };
+  });
+  const retentionAt = (futureDays: number) =>
+    profiles.length
+      ? profiles.reduce(
+          (total, profile) =>
+            total +
+            100 *
+              0.5 **
+                ((profile.elapsedDays + futureDays) / profile.halfLifeDays),
+          0,
+        ) / profiles.length
+      : 0;
+  const currentRetention = retentionAt(0);
+  const curvePoints = Array.from({ length: 31 }, (_, day) => ({
+    day,
+    x: 42 + (day / 30) * 390,
+    y: 150 - (retentionAt(day) / 100) * 120,
+  }));
+  const curvePath = curvePoints
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x} ${point.y}`)
+    .join(" ");
+  const areaPath = `${curvePath} L432 150 L42 150 Z`;
+  const reviewTotal = questions.reduce(
+    (total, question) => total + question.review_count,
+    0,
+  );
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4">
-        <p className="text-sm font-semibold text-slate-900">遗忘曲线</p>
+        <p className="text-sm font-semibold text-slate-900">艾宾浩斯遗忘曲线</p>
         <p className="mt-1 text-xs text-slate-500">
-          示意记忆随时间减弱，并在间隔复习后回升
+          根据错题复习次数、最近复习时间和下次计划估算
         </p>
       </div>
-      <svg
-        viewBox="0 0 460 210"
-        role="img"
-        aria-label="遗忘曲线示意图，复习间隔为 1、3、7、14、30 天"
-        className="h-auto w-full"
-      >
-        <defs>
-          <linearGradient id="retention-fill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--chart-highlight)" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="var(--chart-highlight)" stopOpacity="0.01" />
-          </linearGradient>
-        </defs>
-        {[30, 70, 110, 150].map((y) => (
-          <line
-            key={y}
-            x1="42"
-            x2="432"
-            y1={y}
-            y2={y}
-            stroke="#e2e8f0"
-            strokeDasharray="3 5"
-          />
-        ))}
-        {[1, 3, 7, 14, 30].map((day) => {
-          const x = 42 + (day / 30) * 390;
-          return (
-            <line
-              key={day}
-              x1={x}
-              x2={x}
-              y1="25"
-              y2="150"
-              stroke="#cbd5e1"
-              strokeDasharray="3 5"
+      {loadError ? (
+        <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          无法加载错题复习数据：{loadError}
+        </p>
+      ) : questions.length === 0 ? (
+        <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+          添加错题后，这里会根据复习进度绘制记忆保持曲线。
+        </p>
+      ) : (
+        <>
+          <p className="mb-2 text-xs text-slate-500">
+            {questions.length} 道错题 · 已复习 {reviewTotal} 次 · 当前估算保留率{" "}
+            {Math.round(currentRetention)}%
+          </p>
+          <svg
+            viewBox="0 0 460 210"
+            role="img"
+            aria-label={`基于 ${questions.length} 道错题估算的艾宾浩斯曲线，当前平均记忆保留率约 ${Math.round(currentRetention)}%`}
+            className="h-auto w-full"
+          >
+            <defs>
+              <linearGradient id="retention-fill" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="var(--chart-highlight)" stopOpacity="0.2" />
+                <stop offset="100%" stopColor="var(--chart-highlight)" stopOpacity="0.01" />
+              </linearGradient>
+            </defs>
+            {[100, 75, 50, 25, 0].map((retention) => {
+              const y = 150 - (retention / 100) * 120;
+              return (
+                <g key={retention}>
+                  <line
+                    x1="42"
+                    x2="432"
+                    y1={y}
+                    y2={y}
+                    stroke="#e2e8f0"
+                    strokeDasharray="3 5"
+                  />
+                  <text
+                    x="36"
+                    y={y + 3}
+                    fill="#64748b"
+                    fontSize="9"
+                    textAnchor="end"
+                  >
+                    {retention}%
+                  </text>
+                </g>
+              );
+            })}
+            {[0, 7, 14, 21, 30].map((day) => {
+              const x = 42 + (day / 30) * 390;
+              return (
+                <g key={day}>
+                  <line
+                    x1={x}
+                    x2={x}
+                    y1="30"
+                    y2="150"
+                    stroke="#cbd5e1"
+                    strokeDasharray="3 5"
+                  />
+                  <text
+                    x={x}
+                    y="170"
+                    fill="#64748b"
+                    fontSize="10"
+                    textAnchor="middle"
+                  >
+                    {day}
+                  </text>
+                </g>
+              );
+            })}
+            <path d={areaPath} fill="url(#retention-fill)" />
+            <path
+              d={curvePath}
+              fill="none"
+              stroke="var(--chart-highlight)"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
             />
-          );
-        })}
-        <path
-          d="M42 30 C48 54 53 82 55 94 L55 30 C65 44 77 63 81 76 L81 30 C101 45 119 61 133 78 L133 30 C161 45 191 63 224 80 L224 30 C276 48 341 69 432 91 L432 150 L42 150 Z"
-          fill="url(#retention-fill)"
-        />
-        <path
-          d="M42 30 C48 54 53 82 55 94 L55 30 C65 44 77 63 81 76 L81 30 C101 45 119 61 133 78 L133 30 C161 45 191 63 224 80 L224 30 C276 48 341 69 432 91"
-          fill="none"
-          stroke="var(--chart-highlight)"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-        />
-        {[1, 3, 7, 14, 30].map((day) => {
-          const x = 42 + (day / 30) * 390;
-          return (
             <circle
-              key={day}
-              cx={x}
-              cy="30"
+              cx="42"
+              cy={150 - (currentRetention / 100) * 120}
               r="4"
               fill="#fff"
               stroke="var(--chart-highlight)"
               strokeWidth="2"
             />
-          );
-        })}
-        {[0, 7, 14, 21, 30].map((day) => (
-          <text
-            key={day}
-            x={42 + (day / 30) * 390}
-            y="174"
-            fill="#64748b"
-            fontSize="11"
-            textAnchor="middle"
-          >
-            {day}
-          </text>
-        ))}
-        <text x="237" y="198" fill="#64748b" fontSize="11" textAnchor="middle">
-          距上次复习（天）
-        </text>
-        <text x="12" y="28" fill="#64748b" fontSize="10">
-          记忆
-        </text>
-        <text x="12" y="41" fill="#64748b" fontSize="10">
-          保持
-        </text>
-      </svg>
-      <div className="mt-1 flex flex-wrap gap-2" aria-label="复习间隔">
-        {[1, 3, 7, 14, 30].map((day) => (
-          <span
-            key={day}
-            className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700"
-          >
-            第 {day} 天
-          </span>
-        ))}
-      </div>
+            <text x="237" y="195" fill="#64748b" fontSize="11" textAnchor="middle">
+              从现在开始（天）
+            </text>
+            <text x="4" y="18" fill="#64748b" fontSize="10">
+              保留率
+            </text>
+          </svg>
+        </>
+      )}
     </div>
   );
 }
@@ -130,6 +206,7 @@ export default function ReviewDashboard({
   totalDue: number;
   loadError: string | null;
 }) {
+  const router = useRouter();
   const [dueQuestions, setDueQuestions] = useState(initialQuestions);
   const [totalDue, setTotalDue] = useState(initialTotalDue);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -150,6 +227,7 @@ export default function ReviewDashboard({
       setDueQuestions((current) => current.filter((question) => question.id !== id));
       setTotalDue((current) => Math.max(0, current - 1));
       setNotice("已完成复习，复习计划已更新。");
+      router.refresh();
     } catch {
       setError("更新复习计划失败，请检查网络后重试。");
     } finally {

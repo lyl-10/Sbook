@@ -12,7 +12,13 @@ export default async function HomePage() {
 
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
-  const [documents, questions, attempts, dueQuestions] = await Promise.all([
+  const [
+    documents,
+    questions,
+    attempts,
+    dueQuestions,
+    curveQuestions,
+  ] = await Promise.all([
     supabase
       .from("knowledge_documents")
       .select("id, title, category, created_at", { count: "exact" })
@@ -35,6 +41,10 @@ export default async function HomePage() {
       .lte("next_review_at", now)
       .order("next_review_at", { ascending: true })
       .limit(5),
+    supabase
+      .from("wrong_questions")
+      .select("created_at, review_count, last_reviewed_at, next_review_at")
+      .order("created_at", { ascending: true }),
   ]);
   const errors = [documents.error, questions.error, attempts.error].filter(Boolean);
 
@@ -144,7 +154,11 @@ export default async function HomePage() {
         </div>
       </div>
 
-      <ForgettingCurve />
+      <ForgettingCurve
+        questions={curveQuestions.data ?? []}
+        asOf={now}
+        loadError={curveQuestions.error?.message ?? null}
+      />
     </section>
   );
 }
