@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import {
   deleteWrongQuestion,
+  explainWrongQuestion,
+  generateSimilarWrongQuestions,
   listWrongQuestions,
   saveWrongQuestion,
 } from "@/app/actions";
@@ -24,6 +26,18 @@ const EMPTY_FORM: QuestionForm = {
   knowledgePoint: "",
 };
 
+type SimilarQuestion = {
+  question: string;
+  correctAnswer: string;
+  explanation: string;
+};
+
+type StudyResult = {
+  explanation?: string;
+  similarQuestions?: SimilarQuestion[];
+  error?: string;
+};
+
 export default function ErrorBookPage() {
   const { wrongQuestions: questions, setWrongQuestions: setQuestions } =
     useProtectedData();
@@ -34,6 +48,13 @@ export default function ErrorBookPage() {
   const [notice, setNotice] = useState("");
   const [isLoading, setIsLoading] = useState(questions === null);
   const [isSaving, setIsSaving] = useState(false);
+  const [studyByQuestionId, setStudyByQuestionId] = useState<
+    Record<string, StudyResult>
+  >({});
+  const [activeStudy, setActiveStudy] = useState<{
+    id: string;
+    action: "explanation" | "similar";
+  } | null>(null);
 
   const loadQuestions = async () => {
     const result = await listWrongQuestions();
@@ -100,6 +121,13 @@ export default function ErrorBookPage() {
         setError(result.error);
         return;
       }
+      if (editing) {
+        setStudyByQuestionId((current) => {
+          const next = { ...current };
+          delete next[editing.id];
+          return next;
+        });
+      }
       setIsCreating(false);
       setNotice(editing ? "错题已更新。" : "错题已保存。");
       await refresh();
@@ -119,10 +147,93 @@ export default function ErrorBookPage() {
         setError(result.error);
         return;
       }
+      setStudyByQuestionId((current) => {
+        const next = { ...current };
+        delete next[question.id];
+        return next;
+      });
       setNotice("错题已删除。");
       await refresh();
     } catch {
       setError("删除错题失败，请检查网络后重试。");
+    }
+  };
+
+  const explainQuestion = async (question: WrongQuestion) => {
+    setActiveStudy({ id: question.id, action: "explanation" });
+    setStudyByQuestionId((current) => ({
+      ...current,
+      [question.id]: {
+        ...current[question.id],
+        explanation: undefined,
+        error: undefined,
+      },
+    }));
+    try {
+      const result = await explainWrongQuestion(question.id);
+      if ("error" in result) {
+        setStudyByQuestionId((current) => ({
+          ...current,
+          [question.id]: { ...current[question.id], error: result.error },
+        }));
+        return;
+      }
+      setStudyByQuestionId((current) => ({
+        ...current,
+        [question.id]: {
+          ...current[question.id],
+          explanation: result.data.explanation,
+        },
+      }));
+    } catch {
+      setStudyByQuestionId((current) => ({
+        ...current,
+        [question.id]: {
+          ...current[question.id],
+          error: "AI 讲解失败，请检查网络后重试。",
+        },
+      }));
+    } finally {
+      setActiveStudy(null);
+    }
+  };
+
+  const generateSimilarQuestions = async (question: WrongQuestion) => {
+    setActiveStudy({ id: question.id, action: "similar" });
+    setStudyByQuestionId((current) => ({
+      ...current,
+      [question.id]: {
+        ...current[question.id],
+        similarQuestions: undefined,
+        error: undefined,
+      },
+    }));
+    try {
+      const result = await generateSimilarWrongQuestions(question.id);
+      if ("error" in result) {
+        setStudyByQuestionId((current) => ({
+          ...current,
+          [question.id]: { ...current[question.id], error: result.error },
+        }));
+        return;
+      }
+      setStudyByQuestionId((current) => ({
+        ...current,
+        [question.id]: {
+          ...current[question.id],
+          similarQuestions: result.data,
+        },
+      }));
+    } catch {
+      setStudyByQuestionId((current) => ({
+        ...current,
+        [question.id]: {
+          ...current[question.id],
+          error: "生成相似题失败，请检查网络后重试。",
+        },
+      }));
+    } finally {
+      setActiveStudy(null);
     }
   };
 
@@ -212,6 +323,95 @@ export default function ErrorBookPage() {
                   >
                     删除
                   </Button>
+                </div>
+                <div className="w-full">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={activeStudy !== null}
+                      onClick={() => void explainQuestion(question)}
+                    >
+                      {activeStudy?.id === question.id &&
+                      activeStudy.action === "explanation"
+                        ? "AI 讲解生成中…"
+                        : "AI 讲解"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={activeStudy !== null || !question.knowledge_point.trim()}
+                      onClick={() => void generateSimilarQuestions(question)}
+                    >
+                      {activeStudy?.id === question.id &&
+                      activeStudy.action === "similar"
+                        ? "相似题生成中…"
+                        : "推送相似题"}
+                    </Button>
+                    {!question.knowledge_point.trim() && (
+                      <span className="text-xs text-slate-500">
+                        补充知识点后可生成相似题
+                      </span>
+                    )}
+                  </div>
+                  {studyByQuestionId[question.id]?.error && (
+                    <p
+                      role="alert"
+                      className="mt-2 rounded-lg bg-red-50 p-3 text-sm text-red-700"
+                    >
+                      {studyByQuestionId[question.id].error}
+                    </p>
+                  )}
+                  {studyByQuestionId[question.id]?.explanation && (
+                    <div
+                      role="status"
+                      className="mt-3 rounded-xl bg-violet-50 p-4 text-sm text-slate-700"
+                    >
+                      <h3 className="mb-2 font-semibold text-violet-900">
+                        AI 讲解
+                      </h3>
+                      <p className="whitespace-pre-wrap">
+                        {studyByQuestionId[question.id].explanation}
+                      </p>
+                    </div>
+                  )}
+                  {studyByQuestionId[question.id]?.similarQuestions && (
+                    <div className="mt-3 rounded-xl bg-blue-50 p-4">
+                      <h3 className="mb-3 text-sm font-semibold text-blue-900">
+                        知识点「{question.knowledge_point}」相似题
+                      </h3>
+                      <p className="mb-3 text-xs text-blue-800">
+                        AI 生成内容请结合教材核对。
+                      </p>
+                      <ol className="space-y-3">
+                        {studyByQuestionId[question.id].similarQuestions?.map(
+                          (similarQuestion, index) => (
+                            <li
+                              key={`${question.id}-similar-${index}`}
+                              className="rounded-lg bg-white p-3"
+                            >
+                              <p className="whitespace-pre-wrap text-sm font-medium text-slate-800">
+                                {index + 1}. {similarQuestion.question}
+                              </p>
+                              <details className="mt-2 text-sm text-slate-600">
+                                <summary className="cursor-pointer">
+                                  查看答案与解析
+                                </summary>
+                                <p className="mt-2 whitespace-pre-wrap">
+                                  正确答案：{similarQuestion.correctAnswer}
+                                </p>
+                                <p className="mt-1 whitespace-pre-wrap">
+                                  解析：{similarQuestion.explanation}
+                                </p>
+                              </details>
+                            </li>
+                          ),
+                        )}
+                      </ol>
+                    </div>
+                  )}
                 </div>
               </li>
             ))}

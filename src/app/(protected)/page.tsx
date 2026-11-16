@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import ReviewDashboard from "@/components/ReviewDashboard";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -9,7 +10,8 @@ export default async function HomePage() {
   if (!isSupabaseConfigured()) redirect("/login");
 
   const supabase = await createSupabaseServerClient();
-  const [documents, questions, attempts] = await Promise.all([
+  const now = new Date().toISOString();
+  const [documents, questions, attempts, dueQuestions] = await Promise.all([
     supabase
       .from("knowledge_documents")
       .select("id, title, category, created_at", { count: "exact" })
@@ -23,6 +25,15 @@ export default async function HomePage() {
     supabase
       .from("practice_attempts")
       .select("id", { count: "exact", head: true }),
+    supabase
+      .from("wrong_questions")
+      .select(
+        "id, question, knowledge_point, review_count, next_review_at",
+        { count: "exact" },
+      )
+      .lte("next_review_at", now)
+      .order("next_review_at", { ascending: true })
+      .limit(5),
   ]);
   const errors = [documents.error, questions.error, attempts.error].filter(Boolean);
 
@@ -32,6 +43,12 @@ export default async function HomePage() {
         <h1 className="text-2xl font-bold text-slate-900">我的学习空间</h1>
         <p className="mt-1 text-slate-500">资料、错题和练习记录会安全保存到你的账号。</p>
       </div>
+
+      <ReviewDashboard
+        dueQuestions={dueQuestions.data ?? []}
+        totalDue={dueQuestions.count ?? 0}
+        loadError={dueQuestions.error?.message ?? null}
+      />
 
       {errors.length > 0 && (
         <p role="alert" className="mb-5 rounded-xl bg-red-50 p-4 text-sm text-red-700">

@@ -26,6 +26,9 @@ export type WrongQuestion = {
   correct_answer: string;
   explanation: string;
   knowledge_point: string;
+  review_count: number;
+  last_reviewed_at: string | null;
+  next_review_at: string;
   created_at: string;
   updated_at: string;
 };
@@ -49,7 +52,21 @@ export type Database = {
       >;
       wrong_questions: Table<
         WrongQuestion,
-        Omit<WrongQuestion, "id" | "created_at" | "updated_at">,
+        Omit<
+          WrongQuestion,
+          | "id"
+          | "created_at"
+          | "updated_at"
+          | "review_count"
+          | "last_reviewed_at"
+          | "next_review_at"
+        > &
+          Partial<
+            Pick<
+              WrongQuestion,
+              "review_count" | "last_reviewed_at" | "next_review_at"
+            >
+          >,
         Partial<Omit<WrongQuestion, "id" | "owner_id" | "created_at">>
       >;
       practice_attempts: Table<

@@ -6,13 +6,17 @@
 
 > 联系管理员方式`3013734106@qq.com`
 
+完整技术设计、数据模型、AI 方案和演示脚本见[技术文档](./技术文档.md)。
+
 ## 功能
 
 - 邮箱和密码注册、登录及退出；使用 Supabase Auth 管理会话。
 - 上传、预览、下载和删除 PDF、UTF-8 TXT、Markdown 和 PNG 图片，并按分类和标签整理。
 - 提取 PDF、TXT 和 Markdown 的文本并进行关键词检索。知识库中的 PNG 可上传和预览，但不会自动识别文字；聊天中可附加 PNG 让支持视觉输入的 AI 模型识图。
 - 新增、编辑和删除错题，记录答案、解析和知识点。
+- 按错题知识点生成相似题，并可请求 AI 分步骤讲解错题。
 - 从错题中选择练习，保存作答记录并查看最近记录。
+- 首页展示遗忘曲线示意图，并按 1、3、7、14、30 天间隔提醒复习错题。
 - 对个人资料进行检索问答，展示可核对的原文引用，并支持在聊天中附加 PNG 图片。
 - 数据库启用行级安全策略，资料文件存储在 Supabase 私有存储桶中。
 
@@ -34,6 +38,8 @@
 
 如果数据库已经初始化过，还需要执行 [`supabase/migrations/20261114000000_allow_png_knowledge_files.sql`](./supabase/migrations/20261114000000_allow_png_knowledge_files.sql)，为私有存储桶启用 PNG 上传。
 
+要启用首页的错题复习提醒，还需要执行 [`supabase/migrations/20261116000000_wrong_question_review_schedule.sql`](./supabase/migrations/20261116000000_wrong_question_review_schedule.sql)。
+
 在 Supabase Authentication 设置中启用 Email 登录，并根据需要配置邮箱验证和站点 URL。
 
 ### 2. 配置 Vercel 环境变量
@@ -44,8 +50,8 @@
 | --- | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | 是 | Supabase 项目的 Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | 是 | Supabase 项目的 anon/publishable key |
-| `AI_API_KEY` | 否 | DeepSeek API 密钥；配置 AI 问答时必填，两个名称任选其一 |
-| `AI_MODEL` | 否 | 模型名称；配置 AI 问答时必填，DeepSeek 可用 `deepseek-chat` |
+| `AI_API_KEY` | 否 | 使用 AI 问答或错题辅导时必填；也可使用 `DEEPSEEK_API_KEY` |
+| `AI_MODEL` | 否 | AI 问答或错题辅导使用的模型名称；DeepSeek 可用 `deepseek-chat` |
 | `AI_BASE_URL` | 否 | DeepSeek API 地址；使用 DeepSeek 时设置为 `https://api.deepseek.com` |
 
 `NEXT_PUBLIC_*` 变量会在 Next.js 构建时写入客户端产物；修改后请重新部署。不要将 Supabase `service_role` 密钥放入 `NEXT_PUBLIC_*` 变量，也不要提交任何密钥到仓库。
@@ -85,7 +91,7 @@
 
 4. 打开 <http://localhost:3000>，注册账号后登录。
 
-## AI 问答（已经）
+## AI 问答与错题辅导（已经）
 
 在 Vercel 环境变量或本地 `.env.local` 中配置 DeepSeek 服务端变量，然后重新部署或重启开发服务器：
 
@@ -98,6 +104,8 @@ AI_MODEL=deepseek-chat
 纯文字问题只有检索到相关资料后才会请求模型；附加 PNG 时可直接请模型识图。使用图片时，`AI_MODEL` 必须支持 OpenAI Chat Completions 格式的 `image_url` 视觉输入；具体能力取决于所配置的模型服务。未配置模型或模型请求失败时，界面会明确反馈，并保留可查看的资料引用。
 
 聊天界面通过登录态保护的 `POST /api/chat` 请求问答，请求体为 `{"message":"你的问题"}`；可选附加 `image` 字段，值为 PNG 的 Base64 data URL，单张最大 3 MB。成功响应包含 `answer` 和 `citations`，失败响应包含 `error`。
+
+错题本中的「AI 讲解」和「推送相似题」也使用上述服务端 AI 配置。相似题根据错题知识点生成 3 道题并附答案与解析；未填写知识点时需先补充。错题题目、答案、解析和知识点会发送给配置的 AI 服务商；请勿提交不适合发送给该服务商的内容。
 
 ## 本地验证
 
