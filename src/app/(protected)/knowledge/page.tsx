@@ -130,11 +130,25 @@ export default function KnowledgePage() {
         formData.set("file", file);
         formData.set("category", category);
         formData.set("tags", tags);
-        const response = await fetch("/api/documents", {
-          method: "POST",
-          body: formData,
-        });
-        const result: unknown = await response.json();
+        let response: Response;
+        try {
+          response = await fetch("/api/documents", {
+            method: "POST",
+            body: formData,
+          });
+        } catch {
+          uploadError = `${file.name}：无法连接上传服务，请检查网络后重试。`;
+          break;
+        }
+
+        let result: unknown;
+        try {
+          result = await response.json();
+        } catch {
+          uploadError = `${file.name}：上传服务返回了无法识别的响应（HTTP ${response.status}）。`;
+          break;
+        }
+
         if (!response.ok) {
           const message =
             typeof result === "object" &&
@@ -168,7 +182,7 @@ export default function KnowledgePage() {
         );
       }
     } catch {
-      setError("上传请求失败，请检查网络后重试。");
+      setError("处理上传结果时发生错误，请刷新页面后重试。");
     } finally {
       setIsUploading(false);
       setIsUploadFormOpen(false);

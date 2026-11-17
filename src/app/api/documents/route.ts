@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     if (signature !== "%PDF-") return failure("文件内容不是有效的 PDF。", 400);
 
     try {
-      const pdf = await getDocumentProxy(bytes);
+      const pdf = await getDocumentProxy(bytes.slice());
       if (pdf.numPages > 200) {
         return failure("PDF 最多支持 200 页。", 413);
       }
