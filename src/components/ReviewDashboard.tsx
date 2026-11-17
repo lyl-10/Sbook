@@ -2,13 +2,17 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { RotateCcw } from "lucide-react";
 import { completeWrongQuestionReview } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 
 const reviewIntervals = [1, 3, 7, 14, 30];
 const millisecondsPerDay = 24 * 60 * 60 * 1000;
 const roundChartCoordinate = (value: number) => Math.round(value * 1000) / 1000;
+const graphWidth = 900;
+const graphPointWidth = 220;
+const graphCenterX = (graphWidth - graphPointWidth) / 2;
 
 type DueQuestion = {
   id: string;
@@ -102,6 +106,25 @@ function weaknessColor(score: number) {
   return { text: "text-rose-700", fill: "#e11d48", light: "#fff1f2" };
 }
 
+function graphWeaknessColor(score: number) {
+  if (score >= 70) {
+    return {
+      fill: "var(--knowledge-graph-strong)",
+      light: "var(--knowledge-graph-strong-bg)",
+    };
+  }
+  if (score >= 45) {
+    return {
+      fill: "var(--knowledge-graph-medium)",
+      light: "var(--knowledge-graph-medium-bg)",
+    };
+  }
+  return {
+    fill: "var(--knowledge-graph-weak)",
+    light: "var(--knowledge-graph-weak-bg)",
+  };
+}
+
 function graphLabel(value: string) {
   const characters = Array.from(value);
   return characters.length > 15 ? `${characters.slice(0, 15).join("")}…` : value;
@@ -116,43 +139,129 @@ export function KnowledgeInsights({
   asOf: string;
   loadError: string | null;
 }) {
+  const [selectedKnowledgePoint, setSelectedKnowledgePoint] = useState<string | null>(
+    null,
+  );
+  const [focusedKnowledgePoint, setFocusedKnowledgePoint] = useState<string | null>(
+    null,
+  );
+  const [graphPan, setGraphPan] = useState({ x: 0, y: 0 });
+  const [isPanningGraph, setIsPanningGraph] = useState(false);
+  const graphPanRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    offsetX: number;
+    offsetY: number;
+    knowledgePointName: string | null;
+  } | null>(null);
   const weakPoints = getWeakPoints(questions, asOf);
   const graphPoints = [...weakPoints]
     .sort((a, b) => b.questionCount - a.questionCount || a.score - b.score)
     .slice(0, 6);
-  const graphTags = Array.from(
-    graphPoints.reduce((allTags, point) => {
-      for (const [tag, count] of point.tags) {
-        allTags.set(tag, (allTags.get(tag) ?? 0) + count);
-      }
-      return allTags;
-    }, new Map<string, number>()),
-  )
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 6);
-  const graphTagNames = new Set(graphTags.map(([tag]) => tag));
-  const graphEdges = graphPoints.flatMap((point, pointIndex) =>
-    Array.from(point.tags)
-      .filter(([tag]) => graphTagNames.has(tag))
-      .map(([tag, count]) => ({
-        pointIndex,
-        tagIndex: graphTags.findIndex(([name]) => name === tag),
-        count,
-      })),
+  const selectedPoint = graphPoints.find(
+    (point) => point.name === selectedKnowledgePoint,
   );
-  const hasGraph = graphPoints.length > 0 && graphEdges.length > 0;
+  const graphTags = selectedPoint
+    ? Array.from(selectedPoint.tags)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+    : [];
+  const selectedPointIndex = selectedPoint
+    ? graphPoints.indexOf(selectedPoint)
+    : -1;
+  const graphEdges = graphTags.map(([, count], tagIndex) => ({
+    pointIndex: selectedPointIndex,
+    tagIndex,
+    count,
+  }));
+  const otherGraphPoints = selectedPoint
+    ? graphPoints.filter((point) => point.name !== selectedPoint.name)
+    : [];
+  const hasGraphPoints = graphPoints.length > 0;
   const graphHeight = 350;
   const rowY = (index: number, count: number) =>
     (graphHeight / (count + 1)) * (index + 1);
+  const toggleKnowledgePoint = (name: string) => {
+    setSelectedKnowledgePoint((current) => (current === name ? null : name));
+  };
+  const startGraphPan = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (event.button !== 0) return;
+
+    const knowledgePointName =
+      event.target instanceof Element
+        ? event.target
+            .closest<SVGGElement>("[data-knowledge-point]")
+            ?.getAttribute("data-knowledge-point") ?? null
+        : null;
+    graphPanRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offsetX: graphPan.x,
+      offsetY: graphPan.y,
+      knowledgePointName,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsPanningGraph(true);
+  };
+  const moveGraphPan = (event: React.PointerEvent<SVGSVGElement>) => {
+    const drag = graphPanRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.hypot(deltaX, deltaY) < 4) return;
+
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const x = drag.offsetX + (deltaX * graphWidth) / bounds.width;
+    const y = drag.offsetY + (deltaY * graphHeight) / bounds.height;
+    setGraphPan({
+      x: Math.max(-300, Math.min(300, x)),
+      y: Math.max(-100, Math.min(100, y)),
+    });
+  };
+  const finishGraphPan = (
+    event: React.PointerEvent<SVGSVGElement>,
+    selectKnowledgePoint: boolean,
+  ) => {
+    if (graphPanRef.current?.pointerId !== event.pointerId) return;
+    const drag = graphPanRef.current;
+    const didMove =
+      Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) >= 4;
+    if (
+      selectKnowledgePoint &&
+      !didMove &&
+      drag.knowledgePointName
+    ) {
+      toggleKnowledgePoint(drag.knowledgePointName);
+    }
+    graphPanRef.current = null;
+    setIsPanningGraph(false);
+  };
 
   return (
     <section className="mb-8 grid gap-6 xl:grid-cols-2" aria-label="知识图谱与薄弱点画像">
       <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-4">
-          <h2 className="text-lg font-semibold text-slate-900">知识图谱</h2>
-          <p className="mt-1 text-xs text-slate-500">
-            根据错题中的知识点与 AI 标签关联，最多展示 6 个高频知识点
-          </p>
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">知识图谱</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              点击知识点展开关联标签，最多展示 6 个高频知识点和标签
+            </p>
+          </div>
+          {(graphPan.x !== 0 || graphPan.y !== 0) && (
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setGraphPan({ x: 0, y: 0 })}
+              aria-label="复位知识图谱位置"
+              className="h-auto shrink-0 gap-1 px-2 py-1 text-xs"
+            >
+              <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" />
+              复位
+            </Button>
+          )}
         </div>
         {loadError ? (
           <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
@@ -162,98 +271,190 @@ export function KnowledgeInsights({
           <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
             添加错题并标注知识点后，这里会逐步生成你的知识图谱。
           </p>
-        ) : hasGraph ? (
+        ) : hasGraphPoints ? (
           <>
             <div className="overflow-x-auto">
               <svg
-                viewBox={`0 0 760 ${graphHeight}`}
-                role="img"
-                aria-label={`知识图谱包含 ${graphPoints.length} 个知识点和 ${graphTags.length} 个关联标签`}
-                className="h-auto min-w-[560px] w-full"
+                viewBox={`0 0 ${graphWidth} ${graphHeight}`}
+                role="group"
+                aria-label={
+                  selectedPoint
+                    ? `知识图谱，已展开知识点${selectedPoint.name}的${graphTags.length}个关联标签`
+                    : `知识图谱包含${graphPoints.length}个知识点，点击知识点查看关联标签`
+                }
+                className={`knowledge-graph h-auto min-w-[560px] w-full touch-none ${
+                  isPanningGraph ? "cursor-grabbing" : "cursor-grab"
+                }`}
+                onPointerDown={startGraphPan}
+                onPointerMove={moveGraphPan}
+                onPointerUp={(event) => finishGraphPan(event, true)}
+                onPointerCancel={(event) => finishGraphPan(event, false)}
+                onLostPointerCapture={(event) => finishGraphPan(event, false)}
               >
-                {graphEdges.map((edge, index) => {
-                  const sourceY = rowY(edge.pointIndex, graphPoints.length);
-                  const targetY = rowY(edge.tagIndex, graphTags.length);
-                  const color = weaknessColor(graphPoints[edge.pointIndex].score);
-                  return (
-                    <path
-                      key={`${edge.pointIndex}-${edge.tagIndex}-${index}`}
-                      d={`M260 ${sourceY} C350 ${sourceY}, 410 ${targetY}, 500 ${targetY}`}
-                      fill="none"
-                      stroke={color.fill}
-                      strokeOpacity="0.35"
-                      strokeWidth={Math.min(3, 1 + edge.count * 0.4)}
-                    />
-                  );
-                })}
-                {graphPoints.map((point, index) => {
-                  const y = rowY(index, graphPoints.length);
-                  const color = weaknessColor(point.score);
-                  return (
-                    <g key={point.name}>
-                      <rect
-                        x="24"
-                        y={y - 19}
-                        width="236"
-                        height="38"
-                        rx="12"
-                        fill={color.light}
+                <g transform={`translate(${graphPan.x} ${graphPan.y})`}>
+                  {graphEdges.map((edge, index) => {
+                    const sourceY = graphHeight / 2;
+                    const targetY = rowY(edge.tagIndex, graphTags.length);
+                    const color = graphWeaknessColor(
+                      graphPoints[edge.pointIndex].score,
+                    );
+                    return (
+                      <path
+                        key={`${edge.pointIndex}-${edge.tagIndex}-${index}`}
+                        d={`M${graphCenterX + graphPointWidth} ${sourceY} C600 ${sourceY}, 610 ${targetY}, 640 ${targetY}`}
+                        fill="none"
                         stroke={color.fill}
-                        strokeOpacity="0.35"
+                        strokeOpacity="0.45"
+                        strokeWidth={Math.min(3, 1 + edge.count * 0.4)}
                       />
-                      <circle cx="43" cy={y} r="5" fill={color.fill} />
-                      <text
-                        x="57"
-                        y={y + 4}
-                        fill="#334155"
-                        fontSize="13"
-                        fontWeight="600"
+                    );
+                  })}
+                  {graphPoints.map((point, index) => {
+                    const isSelected = selectedPoint?.name === point.name;
+                    const isFocused = focusedKnowledgePoint === point.name;
+                    const pointX = selectedPoint
+                      ? isSelected
+                        ? graphCenterX
+                        : 24
+                      : graphCenterX;
+                    const otherPointIndex = otherGraphPoints.findIndex(
+                      (otherPoint) => otherPoint.name === point.name,
+                    );
+                    const y = selectedPoint
+                      ? isSelected
+                        ? graphHeight / 2
+                        : rowY(otherPointIndex, otherGraphPoints.length)
+                      : rowY(index, graphPoints.length);
+                    const color = graphWeaknessColor(point.score);
+                    return (
+                      <g
+                        key={point.name}
+                        transform={`translate(${pointX} ${y})`}
+                        role="button"
+                        data-knowledge-point={point.name}
+                        tabIndex={0}
+                        aria-expanded={isSelected}
+                        aria-label={`${point.name}，${point.questionCount} 道错题，${
+                          isSelected ? "已展开关联标签" : "点击展开关联标签"
+                        }`}
+                        className="cursor-pointer transition-transform duration-300"
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            toggleKnowledgePoint(point.name);
+                          }
+                        }}
+                        onFocus={() => setFocusedKnowledgePoint(point.name)}
+                        onBlur={() =>
+                          setFocusedKnowledgePoint((current) =>
+                            current === point.name ? null : current,
+                          )
+                        }
                       >
-                        {graphLabel(point.name)}
-                      </text>
-                      <text
-                        x="245"
-                        y={y + 4}
-                        fill={color.fill}
-                        fontSize="11"
-                        textAnchor="end"
-                      >
-                        {point.questionCount} 题
-                      </text>
-                    </g>
-                  );
-                })}
-                {graphTags.map(([tag], index) => {
-                  const y = rowY(index, graphTags.length);
-                  return (
-                    <g key={tag}>
-                      <rect
-                        x="500"
-                        y={y - 19}
-                        width="236"
-                        height="38"
-                        rx="12"
-                        fill="#eff6ff"
-                        stroke="#bfdbfe"
-                      />
-                      <text
-                        x="618"
-                        y={y + 4}
-                        fill="#1d4ed8"
-                        fontSize="13"
-                        textAnchor="middle"
-                      >
-                        {graphLabel(tag)}
-                      </text>
-                    </g>
-                  );
-                })}
-                <text x="24" y="338" fill="#64748b" fontSize="11">
-                  知识点
-                </text>
-                <text x="736" y="338" fill="#64748b" fontSize="11" textAnchor="end">
-                  关联标签
-                </text>
+                        <rect
+                          x="0"
+                          y="-19"
+                          width={graphPointWidth}
+                          height="38"
+                          rx="12"
+                          fill={color.light}
+                          stroke={
+                            isSelected
+                              ? "var(--knowledge-graph-strong)"
+                              : isFocused
+                              ? "var(--knowledge-graph-focus)"
+                              : color.fill
+                          }
+                          strokeOpacity={isSelected || isFocused ? "1" : "0.35"}
+                          strokeWidth={isSelected || isFocused ? "2" : "1"}
+                        />
+                        <circle cx="19" cy="0" r="5" fill={color.fill} />
+                        <text
+                          x="33"
+                          y="4"
+                          fill="var(--knowledge-graph-label)"
+                          fontSize="13"
+                          fontWeight="600"
+                        >
+                          {graphLabel(point.name)}
+                        </text>
+                        <text
+                          x={graphPointWidth - 15}
+                          y="4"
+                          fill={color.fill}
+                          fontSize="11"
+                          textAnchor="end"
+                        >
+                          {point.questionCount} 题
+                        </text>
+                      </g>
+                    );
+                  })}
+                  {!selectedPoint && (
+                    <text
+                      x="758"
+                      y={graphHeight / 2}
+                      fill="var(--knowledge-graph-muted)"
+                      fontSize="13"
+                      textAnchor="middle"
+                    >
+                      点击知识点查看关联标签
+                    </text>
+                  )}
+                  {selectedPoint && graphTags.length === 0 && (
+                    <text
+                      x="758"
+                      y={graphHeight / 2}
+                      fill="var(--knowledge-graph-muted)"
+                      fontSize="13"
+                      textAnchor="middle"
+                    >
+                      此知识点暂无关联标签
+                    </text>
+                  )}
+                  {graphTags.map(([tag], index) => {
+                    const y = rowY(index, graphTags.length);
+                    return (
+                      <g key={tag}>
+                        <rect
+                          x="640"
+                          y={y - 19}
+                          width="236"
+                          height="38"
+                          rx="12"
+                          fill="var(--knowledge-graph-tag-bg)"
+                          stroke="var(--knowledge-graph-tag-border)"
+                        />
+                        <text
+                          x="758"
+                          y={y + 4}
+                          fill="var(--knowledge-graph-tag-label)"
+                          fontSize="13"
+                          textAnchor="middle"
+                        >
+                          {graphLabel(tag)}
+                        </text>
+                      </g>
+                    );
+                  })}
+                  <text
+                    x="24"
+                    y="338"
+                    fill="var(--knowledge-graph-muted)"
+                    fontSize="11"
+                  >
+                    知识点
+                  </text>
+                  <text
+                    x="876"
+                    y="338"
+                    fill="var(--knowledge-graph-muted)"
+                    fontSize="11"
+                    textAnchor="end"
+                  >
+                    关联标签
+                  </text>
+                </g>
               </svg>
             </div>
             <p className="mt-2 text-xs text-slate-500">

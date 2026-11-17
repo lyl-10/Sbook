@@ -117,7 +117,7 @@ function getAttemptVerdictDisplay(
     case "correct":
       return { label: "作答正确", className: "bg-green-50 text-green-700" };
     case "incorrect":
-      return { label: "作答错误", className: "bg-rose-50 text-rose-700" };
+      return { label: "作答错误", className: "bg-red-50 text-red-700" };
     case "uncertain":
       return { label: "判定不确定", className: "bg-amber-50 text-amber-700" };
     case "unavailable":

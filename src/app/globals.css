@@ -135,6 +135,36 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+.knowledge-graph {
+  --knowledge-graph-strong: #059669;
+  --knowledge-graph-strong-bg: #ecfdf5;
+  --knowledge-graph-medium: #d97706;
+  --knowledge-graph-medium-bg: #fffbeb;
+  --knowledge-graph-weak: #e11d48;
+  --knowledge-graph-weak-bg: #fff1f2;
+  --knowledge-graph-label: #334155;
+  --knowledge-graph-muted: #64748b;
+  --knowledge-graph-focus: #2563eb;
+  --knowledge-graph-tag-bg: #eff6ff;
+  --knowledge-graph-tag-border: #bfdbfe;
+  --knowledge-graph-tag-label: #1d4ed8;
+}
+
+html.dark .knowledge-graph {
+  --knowledge-graph-strong: #34d399;
+  --knowledge-graph-strong-bg: oklch(0.34 0.07 150 / 0.45);
+  --knowledge-graph-medium: #fbbf24;
+  --knowledge-graph-medium-bg: oklch(0.38 0.08 75 / 0.45);
+  --knowledge-graph-weak: #fb7185;
+  --knowledge-graph-weak-bg: oklch(0.34 0.08 25 / 0.45);
+  --knowledge-graph-label: #e2e8f0;
+  --knowledge-graph-muted: #94a3b8;
+  --knowledge-graph-focus: #93c5fd;
+  --knowledge-graph-tag-bg: oklch(0.32 0.07 255 / 0.45);
+  --knowledge-graph-tag-border: oklch(0.5 0.08 255);
+  --knowledge-graph-tag-label: var(--highlight-blue);
+}
+
 html.dark .bg-white {
   background-color: var(--card);
 }
