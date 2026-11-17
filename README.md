@@ -15,7 +15,7 @@
 - 提取 PDF、TXT 和 Markdown 的文本并进行关键词检索。知识库中的 PNG 不做 OCR；小于等于 3 MB 时可由支持视觉输入的 AI 模型辅助生成标签，聊天中也可附加 PNG 让 AI 识图。
 - 新增、编辑和删除错题；保存题目后由 AI 自动添加知识点标签，并记录答案和解析。
 - 按错题知识点生成相似题，并可请求 AI 分步骤讲解错题。
-- 从错题中选择练习，保存作答记录并查看最近记录。
+- 从错题中选择练习；错题可添加文字或 PNG/JPEG/WebP 图片参考答案，练习支持文字或图片作答，AI 会结合参考答案判断；完成后更新复习计划和知识点画像并展示名言奖励。作答图片不保存到记录，参考答案图片保存在私有存储中。
 - 首页根据错题复习次数、最近复习时间和下次计划估算艾宾浩斯遗忘曲线，并按 1、3、7、14、30 天间隔提醒复习错题。
 - 设置中心支持头像和昵称、跟随系统/明亮/暗色模式选择、退出登录及网站更新日志。
 - 对个人资料进行检索问答，展示可核对的原文引用，并支持在聊天中附加 PNG 图片。
@@ -45,6 +45,8 @@
 要启用错题 AI 标签，还需要执行 [`supabase/migrations/20261116172300_wrong_question_tags.sql`](./supabase/migrations/20261116172300_wrong_question_tags.sql)。
 
 要启用个人头像上传，还需要执行 [`supabase/migrations/20261117000000_user_avatars.sql`](./supabase/migrations/20261117000000_user_avatars.sql)。
+
+要为错题上传图片参考答案，还需要执行 [`supabase/migrations/20261117110000_wrong_question_answer_images.sql`](./supabase/migrations/20261117110000_wrong_question_answer_images.sql)。
 
 在 Supabase Authentication 设置中启用 Email 登录，并根据需要配置邮箱验证和站点 URL。
 

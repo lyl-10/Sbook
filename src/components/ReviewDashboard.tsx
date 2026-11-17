@@ -25,6 +25,304 @@ type CurveQuestion = {
   next_review_at: string;
 };
 
+type KnowledgeQuestion = CurveQuestion & {
+  knowledge_point: string;
+  tags: string[];
+};
+
+type WeakPoint = {
+  name: string;
+  questionCount: number;
+  dueCount: number;
+  reviewCount: number;
+  score: number;
+  tags: Map<string, number>;
+};
+
+function getWeakPoints(questions: KnowledgeQuestion[], asOf: string) {
+  const grouped = new Map<
+    string,
+    Omit<WeakPoint, "score"> & { retentionTotal: number }
+  >();
+  const now = Date.parse(asOf);
+
+  for (const question of questions) {
+    const tags = Array.from(
+      new Set(question.tags.map((tag) => tag.trim()).filter(Boolean)),
+    );
+    const name = question.knowledge_point.trim() || "未分类知识点";
+    let point = grouped.get(name);
+
+    if (!point) {
+      point = {
+        name,
+        questionCount: 0,
+        dueCount: 0,
+        reviewCount: 0,
+        retentionTotal: 0,
+        tags: new Map(),
+      };
+      grouped.set(name, point);
+    }
+
+    point.questionCount += 1;
+    point.reviewCount += question.review_count;
+    const reviewAnchor = Date.parse(
+      question.last_reviewed_at ?? question.created_at,
+    );
+    const elapsedDays =
+      Number.isFinite(reviewAnchor) && Number.isFinite(now)
+        ? Math.max(0, (now - reviewAnchor) / millisecondsPerDay)
+        : 0;
+    point.retentionTotal +=
+      100 * 0.5 ** (elapsedDays / getReviewIntervalDays(question));
+    const nextReview = Date.parse(question.next_review_at);
+    if (Number.isFinite(now) && Number.isFinite(nextReview) && nextReview <= now) {
+      point.dueCount += 1;
+    }
+
+    for (const tag of tags) {
+      if (tag !== name) point.tags.set(tag, (point.tags.get(tag) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(grouped.values())
+    .map(({ retentionTotal, ...point }) => {
+      return {
+        ...point,
+        score: Math.round(retentionTotal / point.questionCount),
+      };
+    })
+    .sort((a, b) => a.score - b.score || b.questionCount - a.questionCount);
+}
+
+function weaknessColor(score: number) {
+  if (score >= 70) return { text: "text-emerald-700", fill: "#059669", light: "#ecfdf5" };
+  if (score >= 45) return { text: "text-amber-700", fill: "#d97706", light: "#fffbeb" };
+  return { text: "text-rose-700", fill: "#e11d48", light: "#fff1f2" };
+}
+
+function graphLabel(value: string) {
+  const characters = Array.from(value);
+  return characters.length > 15 ? `${characters.slice(0, 15).join("")}…` : value;
+}
+
+export function KnowledgeInsights({
+  questions,
+  asOf,
+  loadError,
+}: {
+  questions: KnowledgeQuestion[];
+  asOf: string;
+  loadError: string | null;
+}) {
+  const weakPoints = getWeakPoints(questions, asOf);
+  const graphPoints = [...weakPoints]
+    .sort((a, b) => b.questionCount - a.questionCount || a.score - b.score)
+    .slice(0, 6);
+  const graphTags = Array.from(
+    graphPoints.reduce((allTags, point) => {
+      for (const [tag, count] of point.tags) {
+        allTags.set(tag, (allTags.get(tag) ?? 0) + count);
+      }
+      return allTags;
+    }, new Map<string, number>()),
+  )
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6);
+  const graphTagNames = new Set(graphTags.map(([tag]) => tag));
+  const graphEdges = graphPoints.flatMap((point, pointIndex) =>
+    Array.from(point.tags)
+      .filter(([tag]) => graphTagNames.has(tag))
+      .map(([tag, count]) => ({
+        pointIndex,
+        tagIndex: graphTags.findIndex(([name]) => name === tag),
+        count,
+      })),
+  );
+  const hasGraph = graphPoints.length > 0 && graphEdges.length > 0;
+  const graphHeight = 350;
+  const rowY = (index: number, count: number) =>
+    (graphHeight / (count + 1)) * (index + 1);
+
+  return (
+    <section className="mb-8 grid gap-6 xl:grid-cols-2" aria-label="知识图谱与薄弱点画像">
+      <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">知识图谱</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            根据错题中的知识点与 AI 标签关联，最多展示 6 个高频知识点
+          </p>
+        </div>
+        {loadError ? (
+          <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            无法加载知识图谱：{loadError}
+          </p>
+        ) : !questions.length ? (
+          <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+            添加错题并标注知识点后，这里会逐步生成你的知识图谱。
+          </p>
+        ) : hasGraph ? (
+          <>
+            <div className="overflow-x-auto">
+              <svg
+                viewBox={`0 0 760 ${graphHeight}`}
+                role="img"
+                aria-label={`知识图谱包含 ${graphPoints.length} 个知识点和 ${graphTags.length} 个关联标签`}
+                className="h-auto min-w-[560px] w-full"
+              >
+                {graphEdges.map((edge, index) => {
+                  const sourceY = rowY(edge.pointIndex, graphPoints.length);
+                  const targetY = rowY(edge.tagIndex, graphTags.length);
+                  const color = weaknessColor(graphPoints[edge.pointIndex].score);
+                  return (
+                    <path
+                      key={`${edge.pointIndex}-${edge.tagIndex}-${index}`}
+                      d={`M260 ${sourceY} C350 ${sourceY}, 410 ${targetY}, 500 ${targetY}`}
+                      fill="none"
+                      stroke={color.fill}
+                      strokeOpacity="0.35"
+                      strokeWidth={Math.min(3, 1 + edge.count * 0.4)}
+                    />
+                  );
+                })}
+                {graphPoints.map((point, index) => {
+                  const y = rowY(index, graphPoints.length);
+                  const color = weaknessColor(point.score);
+                  return (
+                    <g key={point.name}>
+                      <rect
+                        x="24"
+                        y={y - 19}
+                        width="236"
+                        height="38"
+                        rx="12"
+                        fill={color.light}
+                        stroke={color.fill}
+                        strokeOpacity="0.35"
+                      />
+                      <circle cx="43" cy={y} r="5" fill={color.fill} />
+                      <text
+                        x="57"
+                        y={y + 4}
+                        fill="#334155"
+                        fontSize="13"
+                        fontWeight="600"
+                      >
+                        {graphLabel(point.name)}
+                      </text>
+                      <text
+                        x="245"
+                        y={y + 4}
+                        fill={color.fill}
+                        fontSize="11"
+                        textAnchor="end"
+                      >
+                        {point.questionCount} 题
+                      </text>
+                    </g>
+                  );
+                })}
+                {graphTags.map(([tag], index) => {
+                  const y = rowY(index, graphTags.length);
+                  return (
+                    <g key={tag}>
+                      <rect
+                        x="500"
+                        y={y - 19}
+                        width="236"
+                        height="38"
+                        rx="12"
+                        fill="#eff6ff"
+                        stroke="#bfdbfe"
+                      />
+                      <text
+                        x="618"
+                        y={y + 4}
+                        fill="#1d4ed8"
+                        fontSize="13"
+                        textAnchor="middle"
+                      >
+                        {graphLabel(tag)}
+                      </text>
+                    </g>
+                  );
+                })}
+                <text x="24" y="338" fill="#64748b" fontSize="11">
+                  知识点
+                </text>
+                <text x="736" y="338" fill="#64748b" fontSize="11" textAnchor="end">
+                  关联标签
+                </text>
+              </svg>
+            </div>
+            <p className="mt-2 text-xs text-slate-500">
+              连线表示知识点与标签曾出现在同一道错题中；节点颜色越偏红，越需要巩固。
+            </p>
+          </>
+        ) : (
+          <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+            已有错题记录，但暂无可关联的标签。补充知识点标签后，图谱会显示它们的关联。
+          </p>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-4">
+          <h2 className="text-lg font-semibold text-slate-900">薄弱点画像</h2>
+          <p className="mt-1 text-xs text-slate-500">
+          按最近复习时间和计划间隔估算，复习后为 100，随遗忘曲线下降；指数越低越需要复习
+          </p>
+        </div>
+        {loadError ? (
+          <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
+            无法加载薄弱点画像：{loadError}
+          </p>
+        ) : weakPoints.length ? (
+          <ul className="divide-y divide-slate-100">
+            {weakPoints.slice(0, 5).map((point) => {
+              const color = weaknessColor(point.score);
+              return (
+                <li key={point.name} className="py-3 first:pt-0 last:pb-0">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="truncate text-sm font-medium text-slate-800">
+                      {point.name}
+                    </span>
+                    <span className={`shrink-0 text-xs font-semibold ${color.text}`}>
+                      巩固指数 {point.score}
+                    </span>
+                  </div>
+                  <div
+                    className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"
+                    role="progressbar"
+                    aria-label={`${point.name}巩固指数`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={point.score}
+                  >
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${point.score}%`, backgroundColor: color.fill }}
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-slate-500">
+                    {point.questionCount} 道错题 · {point.dueCount} 道待复习 · 已复习{" "}
+                    {point.reviewCount} 次
+                  </p>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="rounded-xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-600">
+            暂无错题数据，记录错题后即可生成薄弱点画像。
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function getReviewIntervalDays(question: CurveQuestion) {
   const reviewAnchor = Date.parse(question.last_reviewed_at ?? question.created_at);
   const nextReview = Date.parse(question.next_review_at);
@@ -85,6 +383,7 @@ export function ForgettingCurve({
     (total, question) => total + question.review_count,
     0,
   );
+  const retentionPercent = Math.round(currentRetention);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -104,14 +403,54 @@ export function ForgettingCurve({
         </p>
       ) : (
         <>
-          <p className="mb-2 text-xs text-slate-500">
-            {questions.length} 道错题 · 已复习 {reviewTotal} 次 · 当前估算保留率{" "}
-            {Math.round(currentRetention)}%
-          </p>
+          <div className="mb-3 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-medium text-slate-600">错题总数</p>
+              <p className="mt-1 flex items-baseline gap-1">
+                <span className="text-4xl font-bold leading-none text-slate-900">
+                  {questions.length}
+                </span>
+                <span className="text-sm font-medium text-slate-500">道</span>
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+              <p className="text-xs font-medium text-slate-600">累计复习次数</p>
+              <p className="mt-1 flex items-baseline gap-1">
+                <span className="text-4xl font-bold leading-none text-slate-900">
+                  {reviewTotal}
+                </span>
+                <span className="text-sm font-medium text-slate-500">次</span>
+              </p>
+            </div>
+            <div className="min-w-0 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
+              <p className="text-xs font-medium text-blue-800">
+                当前估算记忆保留率
+              </p>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="text-4xl font-bold leading-none text-blue-800">
+                  {retentionPercent}
+                </span>
+                <span className="text-lg font-semibold text-blue-700">%</span>
+              </div>
+              <div
+                className="mt-3 h-2 overflow-hidden rounded-full bg-blue-100"
+                role="progressbar"
+                aria-label="当前估算记忆保留率"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={retentionPercent}
+              >
+                <div
+                  className="h-full rounded-full bg-blue-700 transition-[width]"
+                  style={{ width: `${currentRetention}%` }}
+                />
+              </div>
+            </div>
+          </div>
           <svg
             viewBox="0 0 460 210"
             role="img"
-            aria-label={`基于 ${questions.length} 道错题估算的艾宾浩斯曲线，当前平均记忆保留率约 ${Math.round(currentRetention)}%`}
+            aria-label={`基于 ${questions.length} 道错题估算的艾宾浩斯曲线，当前平均记忆保留率约 ${retentionPercent}%`}
             className="h-auto w-full"
           >
             <defs>

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useEffect, useRef, useState } from "react";
 import { Trash } from "lucide-react";
 import {
   deleteWrongQuestion,
@@ -12,10 +13,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { useProtectedData } from "@/components/ProtectedDataProvider";
 import type { WrongQuestion } from "@/lib/database.types";
+import { createSupabaseBrowserClient } from "@/lib/supabase/client";
+
+const answerImageBucket = "wrong-answer-images";
+const maxAnswerImageBytes = 3 * 1024 * 1024;
+const allowedAnswerImageTypes = ["image/png", "image/jpeg", "image/webp"];
 
 type QuestionForm = {
   question: string;
   correctAnswer: string;
+  correctAnswerImagePath: string | null;
   explanation: string;
   knowledgePoint: string;
 };
@@ -23,9 +30,25 @@ type QuestionForm = {
 const EMPTY_FORM: QuestionForm = {
   question: "",
   correctAnswer: "",
+  correctAnswerImagePath: null,
   explanation: "",
   knowledgePoint: "",
 };
+
+const dateTimeFormatter = new Intl.DateTimeFormat("zh-CN", {
+  timeZone: "Asia/Shanghai",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+function formatDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "时间未设置" : dateTimeFormatter.format(date);
+}
 
 type SimilarQuestion = {
   question: string;
@@ -50,6 +73,12 @@ export default function ErrorBookPage() {
   const [warning, setWarning] = useState("");
   const [isLoading, setIsLoading] = useState(questions === null);
   const [isSaving, setIsSaving] = useState(false);
+  const [correctAnswerImageFile, setCorrectAnswerImageFile] = useState<File | null>(null);
+  const [answerImageUrls, setAnswerImageUrls] = useState<Record<string, string>>({});
+  const [loadingAnswerImagePaths, setLoadingAnswerImagePaths] = useState<
+    Record<string, boolean>
+  >({});
+  const answerImageInputRef = useRef<HTMLInputElement>(null);
   const [studyByQuestionId, setStudyByQuestionId] = useState<
     Record<string, StudyResult>
   >({});
@@ -97,6 +126,8 @@ export default function ErrorBookPage() {
   const openNewQuestion = () => {
     setEditing(null);
     setForm(EMPTY_FORM);
+    setCorrectAnswerImageFile(null);
+    if (answerImageInputRef.current) answerImageInputRef.current.value = "";
     setError("");
     setWarning("");
     setIsCreating(true);
@@ -107,12 +138,69 @@ export default function ErrorBookPage() {
     setForm({
       question: question.question,
       correctAnswer: question.correct_answer,
+      correctAnswerImagePath: question.correct_answer_image_path,
       explanation: question.explanation,
       knowledgePoint: question.knowledge_point,
     });
+    setCorrectAnswerImageFile(null);
+    if (answerImageInputRef.current) answerImageInputRef.current.value = "";
+    if (question.correct_answer_image_path) {
+      void loadAnswerImageUrl(question.correct_answer_image_path);
+    }
     setError("");
     setWarning("");
     setIsCreating(true);
+  };
+
+  const loadAnswerImageUrl = async (path: string) => {
+    if (answerImageUrls[path] || loadingAnswerImagePaths[path]) return;
+
+    setLoadingAnswerImagePaths((current) => ({ ...current, [path]: true }));
+    try {
+      const { data, error: signedUrlError } = await createSupabaseBrowserClient()
+        .storage.from(answerImageBucket)
+        .createSignedUrl(path, 60 * 60);
+      if (signedUrlError) {
+        setError(`读取参考答案图片失败：${signedUrlError.message}`);
+        return;
+      }
+      setAnswerImageUrls((current) => ({ ...current, [path]: data.signedUrl }));
+    } catch {
+      setError("读取参考答案图片失败，请检查网络后重试。");
+    } finally {
+      setLoadingAnswerImagePaths((current) => ({ ...current, [path]: false }));
+    }
+  };
+
+  const removeAnswerImage = async (path: string) => {
+    const { error: removeError } = await createSupabaseBrowserClient()
+      .storage.from(answerImageBucket)
+      .remove([path]);
+    return removeError?.message;
+  };
+
+  const selectCorrectAnswerImage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = "";
+    if (!file) return;
+    if (!allowedAnswerImageTypes.includes(file.type)) {
+      setCorrectAnswerImageFile(null);
+      setError("参考答案图片仅支持 PNG、JPEG 或 WebP 格式。");
+      return;
+    }
+    if (file.size > maxAnswerImageBytes) {
+      setCorrectAnswerImageFile(null);
+      setError("参考答案图片不能超过 3 MB。");
+      return;
+    }
+    setError("");
+    setCorrectAnswerImageFile(file);
+  };
+
+  const clearCorrectAnswerImage = () => {
+    setCorrectAnswerImageFile(null);
+    setForm((current) => ({ ...current, correctAnswerImagePath: null }));
+    if (answerImageInputRef.current) answerImageInputRef.current.value = "";
   };
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -120,11 +208,83 @@ export default function ErrorBookPage() {
     setIsSaving(true);
     setError("");
     setWarning("");
+    let uploadedImagePath: string | null = null;
+    let saveStarted = false;
+    let saveCompleted = false;
     try {
-      const result = await saveWrongQuestion(editing?.id ?? null, form);
+      let correctAnswerImagePath = form.correctAnswerImagePath;
+      if (correctAnswerImageFile) {
+        const supabase = createSupabaseBrowserClient();
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
+        if (userError) {
+          setError(`读取账号失败：${userError.message}`);
+          return;
+        }
+        if (!user) {
+          setError("登录状态已失效，请重新登录。");
+          return;
+        }
+
+        const extension =
+          correctAnswerImageFile.type === "image/jpeg"
+            ? "jpg"
+            : correctAnswerImageFile.type.slice("image/".length);
+        const path = `${user.id}/${crypto.randomUUID()}.${extension}`;
+        const { error: uploadError } = await supabase.storage
+          .from(answerImageBucket)
+          .upload(path, correctAnswerImageFile, {
+            contentType: correctAnswerImageFile.type,
+            cacheControl: "3600",
+          });
+        if (uploadError) {
+          setError(`上传参考答案图片失败：${uploadError.message}`);
+          return;
+        }
+        uploadedImagePath = path;
+        correctAnswerImagePath = path;
+      }
+
+      saveStarted = true;
+      const result = await saveWrongQuestion(editing?.id ?? null, {
+        ...form,
+        correctAnswerImagePath,
+      });
       if ("error" in result) {
-        setError(result.error);
+        let cleanupWarning = "";
+        if (uploadedImagePath) {
+          try {
+            const cleanupError = await removeAnswerImage(uploadedImagePath);
+            if (cleanupError) cleanupWarning = `临时图片清理失败：${cleanupError}`;
+          } catch {
+            cleanupWarning = "临时图片清理失败，请稍后在存储空间中检查。";
+          }
+        }
+        setError([result.error, cleanupWarning].filter(Boolean).join(" "));
         return;
+      }
+      uploadedImagePath = null;
+      saveCompleted = true;
+
+      const warnings = [result.warning].filter((value): value is string => Boolean(value));
+      const oldImagePath = editing?.correct_answer_image_path;
+      if (oldImagePath && oldImagePath !== correctAnswerImagePath) {
+        try {
+          const cleanupError = await removeAnswerImage(oldImagePath);
+          if (cleanupError) {
+            warnings.push(`旧参考答案图片清理失败：${cleanupError}`);
+          } else {
+            setAnswerImageUrls((current) => {
+              const next = { ...current };
+              delete next[oldImagePath];
+              return next;
+            });
+          }
+        } catch {
+          warnings.push("旧参考答案图片清理失败，请稍后在存储空间中检查。");
+        }
       }
       if (editing) {
         setStudyByQuestionId((current) => {
@@ -135,18 +295,38 @@ export default function ErrorBookPage() {
       }
       setIsCreating(false);
       setNotice(
-        result.warning
-          ? editing
+        editing
+          ? warnings.length > 0
             ? "错题已更新。"
-            : "错题已保存。"
-          : editing
-            ? "错题已更新，AI 标签已重新生成。"
-            : "错题已保存，AI 已添加标签。",
+            : "错题已更新，AI 标签已重新生成。"
+          : `错题已保存，首次复习安排在 ${formatDateTime(result.data.next_review_at)}。`,
       );
-      setWarning(result.warning ?? "");
+      setWarning(warnings.join(" "));
+      setCorrectAnswerImageFile(null);
+      if (answerImageInputRef.current) answerImageInputRef.current.value = "";
       await refresh();
     } catch {
-      setError("保存错题失败，请检查网络后重试。");
+      let cleanupWarning = "";
+      if (uploadedImagePath && !saveStarted) {
+        try {
+          const cleanupError = await removeAnswerImage(uploadedImagePath);
+          if (cleanupError) cleanupWarning = `临时图片清理失败：${cleanupError}`;
+        } catch {
+          cleanupWarning = "临时图片清理失败，请稍后在存储空间中检查。";
+        }
+      }
+      setError(
+        [
+          saveCompleted
+            ? "错题已保存，但刷新列表失败，请重新加载页面。"
+            : saveStarted
+              ? "保存结果尚未确认，请刷新错题本检查后再重试。"
+              : "保存错题失败，请检查网络后重试。",
+          cleanupWarning,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
     } finally {
       setIsSaving(false);
     }
@@ -155,6 +335,7 @@ export default function ErrorBookPage() {
   const removeQuestion = async (question: WrongQuestion) => {
     if (!window.confirm("确定删除这道错题吗？已保存的练习记录会保留。")) return;
     setError("");
+    setWarning("");
     try {
       const result = await deleteWrongQuestion(question.id);
       if ("error" in result) {
@@ -166,6 +347,23 @@ export default function ErrorBookPage() {
         delete next[question.id];
         return next;
       });
+      const answerImagePath = question.correct_answer_image_path;
+      if (answerImagePath) {
+        try {
+          const cleanupError = await removeAnswerImage(answerImagePath);
+          if (cleanupError) {
+            setWarning(`错题已删除，但参考答案图片清理失败：${cleanupError}`);
+          } else {
+            setAnswerImageUrls((current) => {
+              const next = { ...current };
+              delete next[answerImagePath];
+              return next;
+            });
+          }
+        } catch {
+          setWarning("错题已删除，但参考答案图片清理失败，请稍后在存储空间中检查。");
+        }
+      }
       setNotice("错题已删除。");
       await refresh();
     } catch {
@@ -259,7 +457,7 @@ export default function ErrorBookPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">错题本</h1>
           <p className="mt-1 text-sm text-slate-500">
-            录入题目后会尝试由 AI 自动添加标签，也可获取 AI 讲解和知识点相似题。
+            可添加文字或图片参考答案，练习时由 AI 结合参考答案判断；题目会尝试自动添加标签，也可获取 AI 讲解和相似题。
           </p>
         </div>
         <Button
@@ -311,6 +509,13 @@ export default function ErrorBookPage() {
                       知识点：{question.knowledge_point}
                     </p>
                   )}
+                  <p className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500">
+                    <span>录入时间：{formatDateTime(question.created_at)}</span>
+                    <span>
+                      下次复习：{formatDateTime(question.next_review_at)}
+                    </span>
+                    <span>已复习 {question.review_count} 次</span>
+                  </p>
                   {(question.tags ?? []).length > 0 && (
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="text-xs text-slate-500">AI 标签：</span>
@@ -324,12 +529,51 @@ export default function ErrorBookPage() {
                       ))}
                     </div>
                   )}
-                  {question.correct_answer && (
-                    <details className="mt-2 text-sm text-slate-600">
-                      <summary className="cursor-pointer">查看正确答案与解析</summary>
-                      <p className="mt-2 whitespace-pre-wrap">
-                        正确答案：{question.correct_answer}
-                      </p>
+                  {(question.correct_answer ||
+                    question.correct_answer_image_path ||
+                    question.explanation) && (
+                    <details
+                      className="mt-2 text-sm text-slate-600"
+                      onToggle={(event) => {
+                        if (
+                          event.currentTarget.open &&
+                          question.correct_answer_image_path
+                        ) {
+                          void loadAnswerImageUrl(
+                            question.correct_answer_image_path,
+                          );
+                        }
+                      }}
+                    >
+                      <summary className="cursor-pointer">查看参考答案与解析</summary>
+                      {question.correct_answer && (
+                        <p className="mt-2 whitespace-pre-wrap">
+                          正确答案：{question.correct_answer}
+                        </p>
+                      )}
+                      {question.correct_answer_image_path && (
+                        <div className="mt-2">
+                          <p>参考答案图片：</p>
+                          {answerImageUrls[question.correct_answer_image_path] ? (
+                            <Image
+                              src={answerImageUrls[question.correct_answer_image_path]}
+                              alt="参考答案"
+                              width={720}
+                              height={480}
+                              unoptimized
+                              className="mt-2 h-auto max-h-80 max-w-full rounded-lg border border-slate-200 object-contain"
+                            />
+                          ) : (
+                            <p className="mt-1 text-xs text-slate-500">
+                              {loadingAnswerImagePaths[
+                                question.correct_answer_image_path
+                              ]
+                                ? "正在加载参考答案图片…"
+                                : "参考答案图片暂不可用，请稍后重试。"}
+                            </p>
+                          )}
+                        </div>
+                      )}
                       {question.explanation && (
                         <p className="mt-1 whitespace-pre-wrap">
                           解析：{question.explanation}
@@ -495,6 +739,65 @@ export default function ErrorBookPage() {
                 className="mt-1 w-full rounded-lg border border-slate-200 p-3 text-slate-900"
               />
             </label>
+            <div className="space-y-2 text-sm text-slate-700">
+              <p>参考答案图片（可选）</p>
+              <input
+                ref={answerImageInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp"
+                onChange={selectCorrectAnswerImage}
+                aria-label="上传参考答案图片"
+                className="sr-only"
+              />
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => answerImageInputRef.current?.click()}
+                  className="h-auto rounded-lg px-4 py-2 text-slate-700"
+                >
+                  {correctAnswerImageFile || form.correctAnswerImagePath
+                    ? "更换参考答案图片"
+                    : "上传参考答案图片"}
+                </Button>
+                {correctAnswerImageFile && (
+                  <span className="max-w-64 truncate text-slate-600">
+                    {correctAnswerImageFile.name}
+                  </span>
+                )}
+                {!correctAnswerImageFile &&
+                  form.correctAnswerImagePath &&
+                  (answerImageUrls[form.correctAnswerImagePath] ? (
+                    <Image
+                      src={answerImageUrls[form.correctAnswerImagePath]}
+                      alt="当前参考答案"
+                      width={320}
+                      height={200}
+                      unoptimized
+                      className="h-auto max-h-40 max-w-48 rounded-lg border border-slate-200 object-contain"
+                    />
+                  ) : (
+                    <span className="text-xs text-slate-500">
+                      {loadingAnswerImagePaths[form.correctAnswerImagePath]
+                        ? "正在加载图片…"
+                        : "已保存参考答案图片"}
+                    </span>
+                  ))}
+                {(correctAnswerImageFile || form.correctAnswerImagePath) && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={clearCorrectAnswerImage}
+                    className="h-auto p-1 text-red-600 hover:bg-transparent hover:text-red-800"
+                  >
+                    移除图片
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-slate-500">
+                支持 PNG、JPEG、WebP，最大 3 MB。图片会保存为私有文件，并在练习时提供给 AI 判题。
+              </p>
+            </div>
             <label className="block text-sm text-slate-700">
               解题解析
               <textarea

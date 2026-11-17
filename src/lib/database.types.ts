@@ -24,6 +24,7 @@ export type WrongQuestion = {
   owner_id: string;
   question: string;
   correct_answer: string;
+  correct_answer_image_path: string | null;
   explanation: string;
   knowledge_point: string;
   tags: string[];
@@ -62,11 +63,16 @@ export type Database = {
           | "review_count"
           | "last_reviewed_at"
           | "next_review_at"
+          | "correct_answer_image_path"
         > &
           Partial<
             Pick<
               WrongQuestion,
-              "tags" | "review_count" | "last_reviewed_at" | "next_review_at"
+              | "tags"
+              | "review_count"
+              | "last_reviewed_at"
+              | "next_review_at"
+              | "correct_answer_image_path"
             >
           >,
         Partial<Omit<WrongQuestion, "id" | "owner_id" | "created_at">>

@@ -13,6 +13,7 @@ export default function KnowledgePage() {
   const [category, setCategory] = useState("");
   const [tags, setTags] = useState("");
   const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [preview, setPreview] = useState<KnowledgeDocument | null>(null);
   const [editing, setEditing] = useState<KnowledgeDocument | null>(null);
   const [editCategory, setEditCategory] = useState("");
@@ -22,6 +23,7 @@ export default function KnowledgePage() {
   const [warning, setWarning] = useState("");
   const [isLoading, setIsLoading] = useState(documents === null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadFormOpen, setIsUploadFormOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -119,6 +121,7 @@ export default function KnowledgePage() {
       setError("上传请求失败，请检查网络后重试。");
     } finally {
       setIsUploading(false);
+      setIsUploadFormOpen(false);
     }
   };
 
@@ -176,13 +179,23 @@ export default function KnowledgePage() {
   };
 
   const documentList = documents ?? [];
+  const existingCategories = Array.from(
+    new Set(
+      documentList
+        .map((document) => document.category.trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b, "zh-CN"));
   const visibleDocuments = documentList.filter((document) => {
     const searchable = [
       document.title,
       document.category,
       ...document.tags,
     ].join(" ").toLocaleLowerCase();
-    return searchable.includes(search.trim().toLocaleLowerCase());
+    return (
+      (!selectedCategory || document.category === selectedCategory) &&
+      searchable.includes(search.trim().toLocaleLowerCase())
+    );
   });
 
   return (
@@ -196,11 +209,16 @@ export default function KnowledgePage() {
         </div>
         <Button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => {
+            setError("");
+            setNotice("");
+            setWarning("");
+            setIsUploadFormOpen(true);
+          }}
           disabled={isUploading}
           className="h-auto rounded-xl bg-blue-700 px-5 py-2.5 font-semibold text-white hover:bg-blue-800 disabled:opacity-50"
         >
-          {isUploading ? "正在上传…" : "+ 上传资料"}
+          + 上传资料
         </Button>
         <input
           ref={inputRef}
@@ -212,28 +230,8 @@ export default function KnowledgePage() {
         />
       </div>
 
-      <div className="mb-6 grid gap-3 rounded-2xl border border-blue-100 bg-white p-4 sm:grid-cols-3">
-        <label className="text-sm text-slate-600">
-          上传分类
-          <input
-            value={category}
-            onChange={(event) => setCategory(event.target.value)}
-            maxLength={50}
-            placeholder="例如：数学"
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
-          />
-        </label>
-        <label className="text-sm text-slate-600">
-          上传标签（逗号分隔）
-          <input
-            value={tags}
-            onChange={(event) => setTags(event.target.value)}
-            maxLength={500}
-            placeholder="例如：函数,复习"
-            className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
-          />
-        </label>
-        <label className="text-sm text-slate-600">
+      <div className="mb-6 rounded-2xl border border-blue-100 bg-white p-4">
+        <label className="block text-sm text-slate-600">
           搜索资料
           <input
             value={search}
@@ -242,6 +240,46 @@ export default function KnowledgePage() {
             className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
           />
         </label>
+        <div className="mt-4">
+          <p className="mb-2 text-sm text-slate-600">按已有分类快捷筛选</p>
+          {existingCategories.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                aria-pressed={selectedCategory === ""}
+                onClick={() => setSelectedCategory("")}
+                className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                  selectedCategory === ""
+                    ? "bg-blue-700 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                全部
+              </button>
+              {existingCategories.map((existingCategory) => (
+                <button
+                  key={existingCategory}
+                  type="button"
+                  aria-pressed={selectedCategory === existingCategory}
+                  onClick={() =>
+                    setSelectedCategory((current) =>
+                      current === existingCategory ? "" : existingCategory,
+                    )
+                  }
+                  className={`rounded-full px-3 py-1.5 text-xs font-medium ${
+                    selectedCategory === existingCategory
+                      ? "bg-blue-700 text-white"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {existingCategory}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-400">暂无已有分类，上传资料并设置分类后会显示在这里。</p>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -258,6 +296,72 @@ export default function KnowledgePage() {
         <p role="status" className="mb-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">
           {warning}
         </p>
+      )}
+
+      {isUploadFormOpen && (
+        <div
+          role="presentation"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => {
+            if (!isUploading) setIsUploadFormOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="upload-dialog-title"
+            className="w-full max-w-lg space-y-4 rounded-2xl bg-white p-6"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div>
+              <h2 id="upload-dialog-title" className="text-lg font-semibold text-slate-900">
+                上传资料
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                设置分类和标签后选择文件；AI 仍会尝试补充标签。
+              </p>
+            </div>
+            <label className="block text-sm text-slate-600">
+              上传分类
+              <input
+                value={category}
+                onChange={(event) => setCategory(event.target.value)}
+                maxLength={50}
+                placeholder="例如：数学"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
+              />
+            </label>
+            <label className="block text-sm text-slate-600">
+              上传标签（逗号分隔）
+              <input
+                value={tags}
+                onChange={(event) => setTags(event.target.value)}
+                maxLength={500}
+                placeholder="例如：函数,复习"
+                className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-900"
+              />
+            </label>
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                type="button"
+                disabled={isUploading}
+                onClick={() => setIsUploadFormOpen(false)}
+                className="h-auto rounded-lg px-4 py-2 text-slate-700"
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                disabled={isUploading}
+                onClick={() => inputRef.current?.click()}
+                className="h-auto rounded-lg bg-blue-700 px-4 py-2 text-white hover:bg-blue-800 disabled:opacity-50"
+              >
+                {isUploading ? "正在上传…" : "选择文件并上传"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
 
       {isLoading ? (

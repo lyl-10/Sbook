@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { BookBookmark, BookOpenText, PencilLine } from "lucide-react";
-import ReviewDashboard, { ForgettingCurve } from "@/components/ReviewDashboard";
+import ReviewDashboard, {
+  ForgettingCurve,
+  KnowledgeInsights,
+} from "@/components/ReviewDashboard";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -18,6 +21,7 @@ export default async function HomePage() {
     attempts,
     dueQuestions,
     curveQuestions,
+    knowledgeQuestions,
   ] = await Promise.all([
     supabase
       .from("knowledge_documents")
@@ -45,8 +49,18 @@ export default async function HomePage() {
       .from("wrong_questions")
       .select("created_at, review_count, last_reviewed_at, next_review_at")
       .order("created_at", { ascending: true }),
+    supabase
+      .from("wrong_questions")
+      .select(
+        "knowledge_point, tags, created_at, review_count, last_reviewed_at, next_review_at",
+      ),
   ]);
-  const errors = [documents.error, questions.error, attempts.error].filter(Boolean);
+  const errors = [
+    documents.error,
+    questions.error,
+    attempts.error,
+    knowledgeQuestions.error,
+  ].filter(Boolean);
 
   return (
     <section>
@@ -59,6 +73,11 @@ export default async function HomePage() {
         dueQuestions={dueQuestions.data ?? []}
         totalDue={dueQuestions.count ?? 0}
         loadError={dueQuestions.error?.message ?? null}
+      />
+      <KnowledgeInsights
+        questions={knowledgeQuestions.data ?? []}
+        asOf={now}
+        loadError={knowledgeQuestions.error?.message ?? null}
       />
 
       {errors.length > 0 && (
