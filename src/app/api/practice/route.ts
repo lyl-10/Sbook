@@ -240,6 +240,7 @@ export async function POST(request: Request) {
     question_id: questionId,
     question_snapshot: question.question,
     answer: savedAnswer,
+    evaluation_verdict: evaluation.verdict,
   });
   if (insertError) {
     return Response.json(

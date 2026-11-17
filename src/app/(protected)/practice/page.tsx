@@ -110,6 +110,23 @@ function formatDateTime(value: string) {
   return Number.isNaN(date.getTime()) ? "时间未设置" : dateTimeFormatter.format(date);
 }
 
+function getAttemptVerdictDisplay(
+  verdict: PracticeAttempt["evaluation_verdict"],
+) {
+  switch (verdict) {
+    case "correct":
+      return { label: "作答正确", className: "bg-green-50 text-green-700" };
+    case "incorrect":
+      return { label: "作答错误", className: "bg-rose-50 text-rose-700" };
+    case "uncertain":
+      return { label: "判定不确定", className: "bg-amber-50 text-amber-700" };
+    case "unavailable":
+      return { label: "无法判定", className: "bg-slate-100 text-slate-600" };
+    default:
+      return { label: "暂无判定", className: "bg-slate-100 text-slate-500" };
+  }
+}
+
 export default function PracticePage() {
   const {
     wrongQuestions: cachedQuestions,
@@ -354,9 +371,11 @@ export default function PracticePage() {
         evaluation: responseBody.evaluation,
       });
       setRewardQuote(
-        motivationalQuotes[
-          Math.floor(Math.random() * motivationalQuotes.length)
-        ],
+        responseBody.evaluation.verdict === "correct"
+          ? motivationalQuotes[
+              Math.floor(Math.random() * motivationalQuotes.length)
+            ]
+          : null,
       );
       setIsFreePracticeDialogOpen(false);
       if (isFreePracticeMode) {
@@ -640,7 +659,7 @@ export default function PracticePage() {
                   作答已保存，但知识点画像的复习排期未更新：{scheduleWarning}
                 </p>
               )}
-              {rewardQuote && (
+              {result.evaluation.verdict === "correct" && rewardQuote && (
                 <blockquote className="rounded-lg border-l-4 border-green-300 bg-white/70 p-3">
                   <p className="font-medium text-green-900">“{rewardQuote.text}”</p>
                   <cite className="mt-1 block text-xs not-italic text-green-700">
@@ -712,35 +731,47 @@ export default function PracticePage() {
                 </p>
               ) : (
                 <ol className="space-y-4">
-                  {attempts.map((attempt) => (
-                    <li
-                      key={attempt.id}
-                      className="border-l-2 border-blue-200 pl-3"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <time className="text-xs text-slate-400">
-                          {new Date(attempt.created_at).toLocaleString()}
-                        </time>
-                        <Button
-                          variant="ghost"
-                          type="button"
-                          disabled={deletingAttemptId !== null}
-                          onClick={() => void removeAttempt(attempt)}
-                          aria-label="删除作答记录"
-                          className="h-auto gap-1 p-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-800"
-                        >
-                          <Trash aria-hidden="true" className="h-3.5 w-3.5" />
-                          {deletingAttemptId === attempt.id ? "删除中…" : "删除"}
-                        </Button>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-700">
-                        {attempt.question_snapshot}
-                      </p>
-                      <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-slate-500">
-                        {attempt.answer}
-                      </p>
-                    </li>
-                  ))}
+                  {attempts.map((attempt) => {
+                    const verdictDisplay = getAttemptVerdictDisplay(
+                      attempt.evaluation_verdict,
+                    );
+                    return (
+                      <li
+                        key={attempt.id}
+                        className="border-l-2 border-blue-200 pl-3"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <time className="text-xs text-slate-400">
+                              {new Date(attempt.created_at).toLocaleString()}
+                            </time>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-medium ${verdictDisplay.className}`}
+                            >
+                              {verdictDisplay.label}
+                            </span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            type="button"
+                            disabled={deletingAttemptId !== null}
+                            onClick={() => void removeAttempt(attempt)}
+                            aria-label="删除作答记录"
+                            className="h-auto gap-1 p-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-800"
+                          >
+                            <Trash aria-hidden="true" className="h-3.5 w-3.5" />
+                            {deletingAttemptId === attempt.id ? "删除中…" : "删除"}
+                          </Button>
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-700">
+                          {attempt.question_snapshot}
+                        </p>
+                        <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-slate-500">
+                          {attempt.answer}
+                        </p>
+                      </li>
+                    );
+                  })}
                 </ol>
               )}
             </div>

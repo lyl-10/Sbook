@@ -41,6 +41,7 @@ export type PracticeAttempt = {
   question_id: string | null;
   question_snapshot: string;
   answer: string;
+  evaluation_verdict: "correct" | "incorrect" | "uncertain" | "unavailable" | null;
   created_at: string;
 };
 
