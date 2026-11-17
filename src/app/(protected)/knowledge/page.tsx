@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Trash } from "lucide-react";
+import { RotateCcw, Trash, ZoomIn, ZoomOut } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { listKnowledgeDocuments, updateKnowledgeMetadata } from "@/app/actions";
 import { Button } from "@/components/ui/button";
 import { useProtectedData } from "@/components/ProtectedDataProvider";
@@ -15,6 +17,12 @@ export default function KnowledgePage() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [preview, setPreview] = useState<KnowledgeDocument | null>(null);
+  const [isPreviewImageLoading, setIsPreviewImageLoading] = useState(false);
+  const [previewImageFailed, setPreviewImageFailed] = useState(false);
+  const [useOriginalPreviewImage, setUseOriginalPreviewImage] = useState(false);
+  const [imageZoom, setImageZoom] = useState(1);
+  const [imageOffsetY, setImageOffsetY] = useState(0);
+  const [isDraggingPreviewImage, setIsDraggingPreviewImage] = useState(false);
   const [editing, setEditing] = useState<KnowledgeDocument | null>(null);
   const [editCategory, setEditCategory] = useState("");
   const [editTags, setEditTags] = useState("");
@@ -26,6 +34,48 @@ export default function KnowledgePage() {
   const [isUploadFormOpen, setIsUploadFormOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const imageViewportRef = useRef<HTMLDivElement>(null);
+  const imageDragRef = useRef<{
+    pointerId: number;
+    startY: number;
+    startOffsetY: number;
+  } | null>(null);
+
+  const changeImageZoom = (change: number) => {
+    setImageZoom((zoom) => Math.min(3, Math.max(0.5, zoom + change)));
+    setImageOffsetY(0);
+  };
+
+  const startImageDrag = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (imageZoom <= 1 || isPreviewImageLoading) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    imageDragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      startOffsetY: imageOffsetY,
+    };
+    setIsDraggingPreviewImage(true);
+  };
+
+  const movePreviewImage = (event: React.PointerEvent<HTMLImageElement>) => {
+    const drag = imageDragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const viewportHeight = imageViewportRef.current?.clientHeight ?? 0;
+    const maxOffset = Math.max(
+      0,
+      (event.currentTarget.offsetHeight * imageZoom - viewportHeight) / 2,
+    );
+    const offset = drag.startOffsetY + event.clientY - drag.startY;
+    setImageOffsetY(Math.min(maxOffset, Math.max(-maxOffset, offset)));
+  };
+
+  const stopPreviewImageDrag = (event: React.PointerEvent<HTMLImageElement>) => {
+    if (imageDragRef.current?.pointerId !== event.pointerId) return;
+    imageDragRef.current = null;
+    setIsDraggingPreviewImage(false);
+  };
 
   const loadDocuments = async () => {
     const result = await listKnowledgeDocuments();
@@ -385,7 +435,16 @@ export default function KnowledgePage() {
               <Button
                 variant="ghost"
                 type="button"
-                onClick={() => setPreview(document)}
+                onClick={() => {
+                  setPreview(document);
+                  setIsPreviewImageLoading(document.mime_type === "image/png");
+                  setPreviewImageFailed(false);
+                  setUseOriginalPreviewImage(false);
+                  setImageZoom(1);
+                  setImageOffsetY(0);
+                  setIsDraggingPreviewImage(false);
+                  imageDragRef.current = null;
+                }}
                 className="h-auto w-full flex-col items-stretch justify-start rounded-lg p-0 text-left text-slate-800 hover:bg-slate-50"
               >
                 <div className="mb-3 flex h-24 items-center justify-center rounded-xl bg-slate-50 text-4xl">
@@ -477,14 +536,126 @@ export default function KnowledgePage() {
               </Button>
             </div>
             {preview.mime_type === "image/png" ? (
-              <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-slate-50 p-4">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`/api/documents/${preview.id}/download`}
-                  alt={preview.title}
-                  className="max-h-full max-w-full object-contain"
-                />
+              <div
+                className="relative min-h-0 flex-1 bg-slate-50"
+                aria-busy={isPreviewImageLoading}
+              >
+                <div
+                  ref={imageViewportRef}
+                  className="flex h-full w-full items-center justify-center overflow-auto p-4"
+                >
+                  {isPreviewImageLoading && (
+                    <p role="status" className="text-sm text-slate-500">
+                      正在加载图片预览…
+                    </p>
+                  )}
+                  {previewImageFailed ? (
+                    <p role="alert" className="text-sm text-red-600">
+                      图片加载失败，请关闭后重试。
+                    </p>
+                  ) : (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`/api/documents/${preview.id}/download${useOriginalPreviewImage ? "" : "?preview=1"}`}
+                      alt={preview.title}
+                      fetchPriority="high"
+                      decoding="async"
+                      draggable={false}
+                      onLoad={() => setIsPreviewImageLoading(false)}
+                      onError={() => {
+                        if (!useOriginalPreviewImage) {
+                          setUseOriginalPreviewImage(true);
+                        } else {
+                          setIsPreviewImageLoading(false);
+                          setPreviewImageFailed(true);
+                        }
+                      }}
+                      onPointerDown={startImageDrag}
+                      onPointerMove={movePreviewImage}
+                      onPointerUp={stopPreviewImageDrag}
+                      onPointerCancel={stopPreviewImageDrag}
+                      className={`max-h-full max-w-full select-none object-contain ${
+                        imageZoom > 1
+                          ? isDraggingPreviewImage
+                            ? "cursor-grabbing"
+                            : "cursor-grab"
+                          : ""
+                      }`}
+                      style={{
+                        transform: `translateY(${imageOffsetY}px) scale(${imageZoom})`,
+                        transformOrigin: "center center",
+                        touchAction: imageZoom > 1 ? "none" : "auto",
+                        transition: isDraggingPreviewImage
+                          ? "none"
+                          : "transform 150ms ease",
+                      }}
+                    />
+                  )}
+                </div>
+                {!previewImageFailed && (
+                  <div className="absolute bottom-4 right-4 z-10 flex items-center gap-1 rounded-full border border-slate-200 bg-white/95 p-1 shadow-md">
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      onClick={() => changeImageZoom(-0.25)}
+                      disabled={imageZoom <= 0.5}
+                      aria-label="缩小图片"
+                      className="h-9 w-9 p-0"
+                    >
+                      <ZoomOut aria-hidden="true" className="h-4 w-4" />
+                    </Button>
+                    <span className="min-w-12 text-center text-xs text-slate-600">
+                      {Math.round(imageZoom * 100)}%
+                    </span>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      onClick={() => changeImageZoom(0.25)}
+                      disabled={imageZoom >= 3}
+                      aria-label="放大图片"
+                      className="h-9 w-9 p-0"
+                    >
+                      <ZoomIn aria-hidden="true" className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      type="button"
+                      onClick={() => {
+                        setImageZoom(1);
+                        setImageOffsetY(0);
+                      }}
+                      disabled={imageZoom === 1}
+                      aria-label="重置图片大小"
+                      className="h-9 w-9 p-0"
+                    >
+                      <RotateCcw aria-hidden="true" className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
+            ) : preview.mime_type === "text/markdown" ? (
+              <article className="min-h-0 flex-1 overflow-auto break-words bg-white p-6 text-slate-800 [&_a]:text-blue-700 [&_a]:underline [&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_blockquote]:text-slate-600 [&_code]:rounded [&_code]:bg-slate-200/70 [&_code]:px-1 [&_code]:py-0.5 [&_h1]:mb-2 [&_h1]:mt-5 [&_h1]:text-xl [&_h1]:font-bold [&_h2]:mb-2 [&_h2]:mt-4 [&_h2]:text-lg [&_h2]:font-semibold [&_h3]:mb-1 [&_h3]:mt-3 [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-2 [&_pre]:my-3 [&_pre]:overflow-x-auto [&_pre]:rounded-lg [&_pre]:bg-slate-900 [&_pre]:p-3 [&_pre]:text-slate-100 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:my-3 [&_table]:w-full [&_table]:border-collapse [&_td]:border [&_td]:border-slate-300 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-100 [&_th]:px-2 [&_th]:py-1 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6">
+                {preview.extracted_text ? (
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      img: ({ alt }) => (
+                        <span className="text-slate-500">
+                          {alt ? `[图片：${alt}]` : "[图片]"}
+                        </span>
+                      ),
+                    }}
+                  >
+                    {preview.extracted_text}
+                  </ReactMarkdown>
+                ) : (
+                  <p className="text-slate-500">此资料暂无可预览的文本内容。</p>
+                )}
+              </article>
+            ) : preview.mime_type === "text/plain" ? (
+              <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words bg-white p-6 font-sans text-slate-800">
+                {preview.extracted_text || "此资料暂无可预览的文本内容。"}
+              </pre>
             ) : (
               <iframe
                 title={preview.title}

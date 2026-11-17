@@ -3,8 +3,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Trash } from "lucide-react";
 import {
   completeWrongQuestionReview,
+  deletePracticeAttempt,
   listPracticeAttempts,
   listWrongQuestions,
 } from "@/app/actions";
@@ -133,6 +135,8 @@ export default function PracticePage() {
   const [scheduleWarning, setScheduleWarning] = useState("");
   const [isFreePracticeDialogOpen, setIsFreePracticeDialogOpen] = useState(false);
   const [isFreePracticeMode, setIsFreePracticeMode] = useState(false);
+  const [areAttemptsCollapsed, setAreAttemptsCollapsed] = useState(false);
+  const [deletingAttemptId, setDeletingAttemptId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [asOf, setAsOf] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(
@@ -212,6 +216,26 @@ export default function PracticePage() {
   const refresh = async () => {
     setIsLoading(true);
     await loadPracticeData();
+  };
+
+  const removeAttempt = async (attempt: PracticeAttempt) => {
+    if (!window.confirm("确定删除这条作答记录吗？此操作无法撤销。")) return;
+    setError("");
+    setDeletingAttemptId(attempt.id);
+    try {
+      const deleteResult = await deletePracticeAttempt(attempt.id);
+      if ("error" in deleteResult) {
+        setError(deleteResult.error);
+        return;
+      }
+      setCachedAttempts((current) =>
+        (current ?? []).filter((item) => item.id !== attempt.id),
+      );
+    } catch {
+      setError("删除练习记录失败，请检查网络后重试。");
+    } finally {
+      setDeletingAttemptId(null);
+    }
   };
 
   const selectedQuestion = useMemo(
@@ -659,25 +683,67 @@ export default function PracticePage() {
         </div>
 
         <aside className="rounded-2xl bg-white p-6 shadow-sm">
-          <h2 className="mb-4 text-lg font-semibold text-slate-900">最近作答记录</h2>
-          {attempts.length === 0 ? (
-            <p className="text-sm text-slate-500">提交后，作答记录会显示在这里。</p>
-          ) : (
-            <ol className="space-y-4">
-              {attempts.map((attempt) => (
-                <li key={attempt.id} className="border-l-2 border-blue-200 pl-3">
-                  <time className="text-xs text-slate-400">
-                    {new Date(attempt.created_at).toLocaleString()}
-                  </time>
-                  <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-700">
-                    {attempt.question_snapshot}
-                  </p>
-                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-slate-500">
-                    {attempt.answer}
-                  </p>
-                </li>
-              ))}
-            </ol>
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 id="practice-attempts-heading" className="text-lg font-semibold text-slate-900">
+              最近作答记录
+            </h2>
+            <Button
+              variant="ghost"
+              type="button"
+              aria-expanded={!areAttemptsCollapsed}
+              aria-controls="practice-attempts-list"
+              aria-label={areAttemptsCollapsed ? "展开最近作答记录" : "折叠最近作答记录"}
+              onClick={() => setAreAttemptsCollapsed((collapsed) => !collapsed)}
+              className="h-9 w-9 p-0 text-slate-500"
+            >
+              <ChevronDown
+                aria-hidden="true"
+                className={`h-5 w-5 transition-transform ${
+                  areAttemptsCollapsed ? "-rotate-90" : ""
+                }`}
+              />
+            </Button>
+          </div>
+          {!areAttemptsCollapsed && (
+            <div id="practice-attempts-list">
+              {attempts.length === 0 ? (
+                <p className="text-sm text-slate-500">
+                  提交后，作答记录会显示在这里。
+                </p>
+              ) : (
+                <ol className="space-y-4">
+                  {attempts.map((attempt) => (
+                    <li
+                      key={attempt.id}
+                      className="border-l-2 border-blue-200 pl-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <time className="text-xs text-slate-400">
+                          {new Date(attempt.created_at).toLocaleString()}
+                        </time>
+                        <Button
+                          variant="ghost"
+                          type="button"
+                          disabled={deletingAttemptId !== null}
+                          onClick={() => void removeAttempt(attempt)}
+                          aria-label="删除作答记录"
+                          className="h-auto gap-1 p-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-800"
+                        >
+                          <Trash aria-hidden="true" className="h-3.5 w-3.5" />
+                          {deletingAttemptId === attempt.id ? "删除中…" : "删除"}
+                        </Button>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-sm font-medium text-slate-700">
+                        {attempt.question_snapshot}
+                      </p>
+                      <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-sm text-slate-500">
+                        {attempt.answer}
+                      </p>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           )}
         </aside>
       </div>

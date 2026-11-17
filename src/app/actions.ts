@@ -354,6 +354,25 @@ export async function listPracticeAttempts(): Promise<
   return { data };
 }
 
+export async function deletePracticeAttempt(
+  id: string,
+): Promise<ActionResult<null>> {
+  const context = await getUserContext();
+  if (!context.ok) return { error: context.error };
+
+  const { data, error } = await context.supabase
+    .from("practice_attempts")
+    .delete()
+    .eq("id", id)
+    .eq("owner_id", context.user.id)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { error: `删除练习记录失败：${error.message}` };
+  if (!data) return { error: "练习记录不存在或无权删除。" };
+  return { data: null };
+}
+
 type Citation = { id: string; title: string; excerpt: string };
 
 function searchTerms(query: string) {
